@@ -103,6 +103,7 @@ fun HomeSpacesView(
                 SpaceRoomItemView(
                     spaceRoom = spaceRoom,
                     showUnreadIndicator = isInvitation && spaceRoom.roomId !in state.seenSpaceInvites,
+                    unreadCount = state.unreadBySpace[spaceRoom.roomId] ?: 0L,
                     hideAvatars = isInvitation && state.hideInvitesAvatar,
                     onClick = {
                         onSpaceClick(spaceRoom.roomId)

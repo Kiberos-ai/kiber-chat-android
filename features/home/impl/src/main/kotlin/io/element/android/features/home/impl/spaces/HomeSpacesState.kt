@@ -11,6 +11,8 @@ package io.element.android.features.home.impl.spaces
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.spaces.SpaceRoom
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.ImmutableSet
 
 data class HomeSpacesState(
@@ -19,6 +21,8 @@ data class HomeSpacesState(
     val seenSpaceInvites: ImmutableSet<RoomId>,
     val hideInvitesAvatar: Boolean,
     val canExploreSpaces: Boolean,
+    /** Kiber: unread notifications summed over every room inside each space (nested spaces included). */
+    val unreadBySpace: ImmutableMap<RoomId, Long> = persistentMapOf(),
     val eventSink: (HomeSpacesEvent) -> Unit,
 )
 

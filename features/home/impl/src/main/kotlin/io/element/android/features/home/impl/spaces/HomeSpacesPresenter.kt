@@ -18,9 +18,12 @@ import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.ui.safety.rememberHideInvitesAvatar
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 @Inject
@@ -34,6 +37,20 @@ class HomeSpacesPresenter(
         val spaceRooms by remember {
             client.spaceService.topLevelSpacesFlow.map { it.toImmutableList() }
         }.collectAsState(persistentListOf())
+
+        // Kiber: sum of unread notifications per space. The SDK gives every space the ids of all rooms below it,
+        // so one pass over the room summaries covers nested levels without walking the tree ourselves.
+        val unreadBySpace by remember {
+            combine(
+                client.spaceService.spaceFiltersFlow,
+                client.roomListService.allRooms.summaries,
+            ) { filters, summaries ->
+                val unreadByRoom = summaries.associate { it.roomId to it.info.numUnreadNotifications }
+                filters.associate { filter ->
+                    filter.spaceRoom.roomId to filter.descendants.sumOf { unreadByRoom[it] ?: 0L }
+                }.toImmutableMap()
+            }
+        }.collectAsState(persistentMapOf())
 
         val seenSpaceInvites by remember {
             seenInvitesStore.seenRoomIds().map { it.toImmutableSet() }
@@ -50,6 +67,7 @@ class HomeSpacesPresenter(
             hideInvitesAvatar = hideInvitesAvatar,
             // TODO enable once we can link to the screen to explore public spaces
             canExploreSpaces = false,
+            unreadBySpace = unreadBySpace,
             eventSink = ::handleEvent,
         )
     }

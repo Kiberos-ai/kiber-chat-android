@@ -66,6 +66,7 @@ fun SpaceRoomItemView(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
+    unreadCount: Long = 0L,
     trailingAction: @Composable (() -> Unit)? = null,
     bottomAction: @Composable (() -> Unit)? = null,
 ) {
@@ -94,7 +95,8 @@ fun SpaceRoomItemView(
         ) {
             NameAndIndicatorRow(
                 name = spaceRoom.displayName,
-                showIndicator = showUnreadIndicator
+                showIndicator = showUnreadIndicator,
+                unreadCount = unreadCount,
             )
             Spacer(modifier = Modifier.height(1.dp))
             VisibilityRow(visibility = spaceRoom.visibility)
@@ -151,6 +153,7 @@ private fun VisibilityRow(
 private fun NameAndIndicatorRow(
     name: String,
     showIndicator: Boolean,
+    unreadCount: Long,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -166,7 +169,9 @@ private fun NameAndIndicatorRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        if (showIndicator) {
+        if (unreadCount > 0L) {
+            UnreadIndicatorAtom(count = unreadCount)
+        } else if (showIndicator) {
             UnreadIndicatorAtom(count = 0)
         }
     }
