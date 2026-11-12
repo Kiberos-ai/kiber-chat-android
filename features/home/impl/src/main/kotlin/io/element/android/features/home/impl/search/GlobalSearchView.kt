@@ -86,6 +86,7 @@ import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.designsystem.utils.OnVisibleRangeChangeEffect
 import io.element.android.libraries.designsystem.utils.lazyColumnContentPadding
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
+import io.element.android.libraries.matrix.api.core.visibleToUsers
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.ui.components.AttachmentThumbnail
@@ -386,9 +387,9 @@ private fun LazyListScope.searchHistory(
                                     color = ElementTheme.colors.textSecondary,
                                 )
                             }
-                        } else if (result.roomInfo.canonicalAlias != null) {
+                        } else if (result.roomInfo.canonicalAlias.visibleToUsers() != null) {
                             Text(
-                                text = result.roomInfo.canonicalAlias?.value!!,
+                                text = result.roomInfo.canonicalAlias.visibleToUsers()?.value!!,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 style = ElementTheme.typography.fontBodyMdRegular,

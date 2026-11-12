@@ -117,3 +117,4 @@ checkouts/**
 kiber-chat-release.keystore
 keystore.properties
 google-services.json
+release-out/

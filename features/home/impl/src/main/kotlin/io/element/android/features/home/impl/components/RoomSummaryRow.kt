@@ -60,6 +60,7 @@ import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.roomListRoomMessage
 import io.element.android.libraries.designsystem.theme.roomListRoomMessageDate
 import io.element.android.libraries.designsystem.theme.roomListRoomName
+import io.element.android.libraries.matrix.api.core.visibleToUsers
 import io.element.android.libraries.matrix.api.notification.CallIntent
 import io.element.android.libraries.matrix.api.room.RoomNotificationMode
 import io.element.android.libraries.matrix.api.user.DisplayedStatus
@@ -148,9 +149,10 @@ internal fun RoomSummaryRow(
                         isHighlighted = room.isHighlighted,
                         dmUserStatus = null,
                     )
-                    if (room.canonicalAlias != null) {
+                    val visibleAlias = room.canonicalAlias.visibleToUsers()
+                    if (visibleAlias != null) {
                         Text(
-                            text = room.canonicalAlias.value,
+                            text = visibleAlias.value,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = ElementTheme.typography.fontBodyMdRegular,

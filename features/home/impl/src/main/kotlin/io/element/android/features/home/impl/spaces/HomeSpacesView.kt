@@ -36,6 +36,7 @@ import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Button
 import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
 import io.element.android.libraries.designsystem.theme.components.TextButton
+import io.element.android.libraries.matrix.api.core.visibleToUsers
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.ui.components.SpaceHeaderRootView
@@ -79,7 +80,7 @@ fun HomeSpacesView(
                     item {
                         SpaceHeaderView(
                             avatarData = space.spaceRoom.getAvatarData(AvatarSize.SpaceHeader),
-                            alias = space.spaceRoom.canonicalAlias,
+                            alias = space.spaceRoom.canonicalAlias.visibleToUsers(),
                             name = space.spaceRoom.displayName,
                             topic = space.spaceRoom.topic,
                             visibility = space.spaceRoom.visibility,

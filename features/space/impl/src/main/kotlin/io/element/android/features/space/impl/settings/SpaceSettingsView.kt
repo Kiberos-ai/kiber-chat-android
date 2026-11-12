@@ -44,6 +44,7 @@ import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.designsystem.utils.lazyColumnContentPadding
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
+import io.element.android.libraries.matrix.api.core.visibleToUsers
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.ui.strings.CommonStrings
 
@@ -75,7 +76,7 @@ fun SpaceSettingsView(
                 roomId = state.roomId,
                 name = state.name,
                 avatarUrl = state.avatarUrl,
-                canonicalAlias = state.canonicalAlias?.value,
+                canonicalAlias = state.canonicalAlias.visibleToUsers()?.value,
                 canEditDetails = state.canEditDetails,
                 onSpaceInfoClick = onSpaceInfoClick,
             )

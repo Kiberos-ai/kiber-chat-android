@@ -83,6 +83,7 @@ import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.designsystem.utils.lazyColumnContentPadding
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
+import io.element.android.libraries.matrix.api.core.visibleToUsers
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.spaces.SpaceRoom
@@ -266,7 +267,7 @@ private fun SpaceViewContent(
                 Column {
                     SpaceHeaderView(
                         avatarData = spaceInfo.getAvatarData(AvatarSize.SpaceHeader),
-                        alias = spaceInfo.canonicalAlias,
+                        alias = spaceInfo.canonicalAlias.visibleToUsers(),
                         name = spaceInfo.name,
                         topic = spaceInfo.topic,
                         topicMaxLines = 2,

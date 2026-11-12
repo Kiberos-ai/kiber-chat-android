@@ -45,6 +45,7 @@ import io.element.android.libraries.designsystem.theme.components.SearchField
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.utils.lazyColumnContentPadding
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
+import io.element.android.libraries.matrix.api.core.visibleToUsers
 import io.element.android.libraries.matrix.api.spaces.SpaceServiceFilter
 import io.element.android.libraries.matrix.ui.model.getAvatarData
 import io.element.android.libraries.ui.strings.CommonStrings
@@ -150,7 +151,7 @@ private fun SpaceFilterItem(
     modifier: Modifier = Modifier
 ) {
     val spaceRoom = filter.spaceRoom
-    val supportingText = spaceRoom.canonicalAlias?.value
+    val supportingText = spaceRoom.canonicalAlias.visibleToUsers()?.value
 
     Row(
         modifier = modifier

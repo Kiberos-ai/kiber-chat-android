@@ -21,3 +21,9 @@ value class RoomAlias(val value: String) : Serializable {
 
     override fun toString(): String = value
 }
+
+/**
+ * Kiber: aliases starting with `#_synqwire_` are internal pointers created by the bridge, not meant for people.
+ * Other aliases (e.g. public rooms that use the alias as their name) stay visible.
+ */
+fun RoomAlias?.visibleToUsers(): RoomAlias? = this?.takeUnless { it.value.startsWith("#_synqwire_") }
