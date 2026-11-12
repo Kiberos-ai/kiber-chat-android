@@ -68,6 +68,7 @@ sealed interface AccountProvider {
     }
 }
 
+// Kiber: the default provider is our own homeserver, not matrix.org (the name is kept to minimise the diff with upstream).
 val matrixOrgAccountProvider = AccountProvider.Generic(
-    serverName = "matrix.org",
+    serverName = "matrix.synqwire.io",
 )
