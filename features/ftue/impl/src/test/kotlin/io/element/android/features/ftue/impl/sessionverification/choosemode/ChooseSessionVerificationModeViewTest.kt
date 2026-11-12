@@ -90,6 +90,7 @@ class ChooseSessionVerificationModeViewTest : RobolectricTest() {
         onUseAnotherDevice: () -> Unit = EnsureNeverCalled(),
         onResetKey: () -> Unit = EnsureNeverCalled(),
         onEnterRecoveryKey: () -> Unit = EnsureNeverCalled(),
+        onSkip: () -> Unit = EnsureNeverCalled(),
     ) {
         setContent {
             ChooseSelfVerificationModeView(
@@ -98,6 +99,7 @@ class ChooseSessionVerificationModeViewTest : RobolectricTest() {
                 onUseAnotherDevice = onUseAnotherDevice,
                 onResetKey = onResetKey,
                 onUseRecoveryKey = onEnterRecoveryKey,
+                onSkip = onSkip,
             )
         }
     }

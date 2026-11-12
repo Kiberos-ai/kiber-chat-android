@@ -56,6 +56,7 @@ fun ChooseSelfVerificationModeView(
     onUseRecoveryKey: () -> Unit,
     onResetKey: () -> Unit,
     onLearnMore: () -> Unit,
+    onSkip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val activity = LocalActivity.current
@@ -90,6 +91,7 @@ fun ChooseSelfVerificationModeView(
                 onUseAnotherDevice = onUseAnotherDevice,
                 onUseRecoveryKey = onUseRecoveryKey,
                 onResetKey = onResetKey,
+                onSkip = onSkip,
             )
         }
     ) {
@@ -129,6 +131,7 @@ private fun ChooseSelfVerificationModeButtons(
     onUseAnotherDevice: () -> Unit,
     onUseRecoveryKey: () -> Unit,
     onResetKey: () -> Unit,
+    onSkip: () -> Unit,
 ) {
     ButtonColumnMolecule(
         modifier = Modifier.padding(bottom = 16.dp)
@@ -160,6 +163,11 @@ private fun ChooseSelfVerificationModeButtons(
                     text = stringResource(R.string.screen_identity_confirmation_cannot_confirm),
                     onClick = onResetKey,
                 )
+                TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(R.string.screen_identity_skip_verification),
+                    onClick = onSkip,
+                )
             }
         }
     }
@@ -176,5 +184,6 @@ internal fun ChooseSelfVerificationModeViewPreview(
         onUseRecoveryKey = {},
         onResetKey = {},
         onLearnMore = {},
+        onSkip = {},
     )
 }

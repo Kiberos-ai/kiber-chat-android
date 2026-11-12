@@ -34,6 +34,7 @@ class ChooseSelfVerificationModeNode(
         fun navigateToUseRecoveryKey()
         fun navigateToResetKey()
         fun navigateToLearnMoreAboutEncryption()
+        fun navigateToSkip()
     }
 
     private val callback: Callback = callback()
@@ -48,6 +49,7 @@ class ChooseSelfVerificationModeNode(
             onUseRecoveryKey = callback::navigateToUseRecoveryKey,
             onResetKey = callback::navigateToResetKey,
             onLearnMore = callback::navigateToLearnMoreAboutEncryption,
+            onSkip = callback::navigateToSkip,
             modifier = modifier,
         )
 

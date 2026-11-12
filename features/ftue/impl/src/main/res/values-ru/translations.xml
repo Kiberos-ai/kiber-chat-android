@@ -12,4 +12,5 @@
   <string name="screen_identity_waiting_on_other_device">"Ожидание другого устройства…"</string>
   <string name="screen_notification_optin_subtitle">"Вы можете изменить настройки позже."</string>
   <string name="screen_notification_optin_title">"Разрешите отправку уведомлений"</string>
+  <string name="screen_identity_skip_verification">"Пропустить"</string>
 </resources>

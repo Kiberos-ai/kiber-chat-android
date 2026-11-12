@@ -30,6 +30,7 @@ import io.element.android.features.verifysession.api.OutgoingVerificationEntryPo
 import io.element.android.libraries.architecture.BackstackView
 import io.element.android.libraries.architecture.BaseFlowNode
 import io.element.android.libraries.architecture.callback
+import io.element.android.libraries.preferences.api.store.SessionPreferencesStore
 import io.element.android.libraries.architecture.createNode
 import io.element.android.libraries.designsystem.utils.OpenUrlInTabView
 import io.element.android.libraries.di.SessionScope
@@ -44,6 +45,7 @@ class FtueSessionVerificationFlowNode(
     @Assisted plugins: List<Plugin>,
     private val outgoingVerificationEntryPoint: OutgoingVerificationEntryPoint,
     private val secureBackupEntryPoint: SecureBackupEntryPoint,
+    private val sessionPreferencesStore: SessionPreferencesStore,
 ) : BaseFlowNode<FtueSessionVerificationFlowNode.NavTarget>(
     backstack = BackStack(
         initialElement = NavTarget.Root,
@@ -99,6 +101,14 @@ class FtueSessionVerificationFlowNode(
 
                     override fun navigateToLearnMoreAboutEncryption() {
                         learnMoreUrl.value = LearnMoreConfig.DEVICE_VERIFICATION_URL
+                    }
+
+                    // Kiber: let the user skip session verification.
+                    override fun navigateToSkip() {
+                        lifecycleScope.launch {
+                            sessionPreferencesStore.setSkipSessionVerification(true)
+                            callback.onDone()
+                        }
                     }
                 }
                 createNode<ChooseSelfVerificationModeNode>(buildContext, plugins = listOf(callback))
