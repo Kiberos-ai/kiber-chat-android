@@ -8,7 +8,6 @@
 
 package io.element.android.libraries.designsystem.components
 
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.contentColorFor
@@ -24,7 +23,6 @@ import io.element.android.compound.theme.ElementTheme
  * It places the content according to the current height offset of the scroll behavior.
  *
  */
-@ExperimentalMaterial3Api
 @Composable
 fun TopAppBarScrollBehaviorLayout(
     scrollBehavior: TopAppBarScrollBehavior,
@@ -45,7 +43,7 @@ fun TopAppBarScrollBehaviorLayout(
                 val contentHeight = placeable.height.toFloat()
                 scrollBehavior.state.heightOffsetLimit = -contentHeight
                 val heightOffset = scrollBehavior.state.heightOffset
-                val layoutHeight = (contentHeight + heightOffset).toInt()
+                val layoutHeight = (contentHeight + heightOffset).toInt().coerceAtLeast(0)
                 layout(placeable.width, layoutHeight) {
                     placeable.place(0, heightOffset.toInt())
                 }

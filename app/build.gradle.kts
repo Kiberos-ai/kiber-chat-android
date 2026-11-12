@@ -21,27 +21,23 @@ import extension.allFeaturesImpl
 import extension.allLibrariesImpl
 import extension.allServicesImpl
 import extension.buildConfigFieldStr
-import extension.koverDependencies
+import extension.environmentOrGradleValue
 import extension.locales
 import extension.setupDependencyInjection
-import extension.setupKover
 import extension.testCommonDependencies
+import org.sonarqube.gradle.SonarResolverTask
 import java.util.Locale
 
 plugins {
     id("io.element.android-compose-application")
-    alias(libs.plugins.kotlin.android)
     // When using precompiled plugins, we need to apply the firebase plugin like this
     id(libs.plugins.firebaseAppDistribution.get().pluginId)
-    alias(libs.plugins.knit)
     id("kotlin-parcelize")
     alias(libs.plugins.licensee)
     alias(libs.plugins.kotlin.serialization)
     // To be able to update the firebase.xml files, uncomment and build the project
     // alias(libs.plugins.gms.google.services)
 }
-
-setupKover()
 
 android {
     namespace = "io.element.android.x"
@@ -93,13 +89,14 @@ android {
             storePassword = "android"
         }
         register("nightly") {
-            keyAlias = System.getenv("ELEMENT_ANDROID_NIGHTLY_KEYID")
-                ?: project.property("signing.element.nightly.keyId") as? String?
-            keyPassword = System.getenv("ELEMENT_ANDROID_NIGHTLY_KEYPASSWORD")
-                ?: project.property("signing.element.nightly.keyPassword") as? String?
-            storeFile = file("./signature/nightly.keystore")
-            storePassword = System.getenv("ELEMENT_ANDROID_NIGHTLY_STOREPASSWORD")
-                ?: project.property("signing.element.nightly.storePassword") as? String?
+            keyAlias = environmentOrGradleValue("ELEMENT_ANDROID_NIGHTLY_KEYID", "signing.element.nightly.keyId")
+            keyPassword = environmentOrGradleValue("ELEMENT_ANDROID_NIGHTLY_KEYPASSWORD", "signing.element.nightly.keyPassword")
+            storeFile = file(
+                environmentOrGradleValue("ELEMENT_ANDROID_NIGHTLY_STOREFILE", "signing.element.nightly.storeFile")
+                    ?.ifBlank { null }
+                    ?: "./signature/nightly.keystore"
+            )
+            storePassword = environmentOrGradleValue("ELEMENT_ANDROID_NIGHTLY_STOREPASSWORD", "signing.element.nightly.storePassword")
         }
     }
 
@@ -108,13 +105,13 @@ android {
     logger.warnInBox("Building ${defaultConfig.applicationId} ($baseAppName) [$buildType]")
 
     buildTypes {
-        val oidcRedirectSchemeBase = BuildTimeConfig.METADATA_HOST_REVERSED ?: "io.element.android"
+        val oAuthRedirectSchemeBase = BuildTimeConfig.METADATA_HOST_REVERSED ?: "io.element.android"
         getByName("debug") {
             resValue("string", "app_name", "$baseAppName dbg")
             resValue(
                 "string",
                 "login_redirect_scheme",
-                "$oidcRedirectSchemeBase.debug",
+                "$oAuthRedirectSchemeBase.debug",
             )
             applicationIdSuffix = ".debug"
             signingConfig = signingConfigs.getByName("debug")
@@ -125,31 +122,18 @@ android {
             resValue(
                 "string",
                 "login_redirect_scheme",
-                oidcRedirectSchemeBase,
+                oAuthRedirectSchemeBase,
             )
             signingConfig = signingConfigs.getByName("debug")
 
             optimization {
                 enable = true
                 keepRules {
-                    files.add(File(projectDir, "common-proguard-rules.pro"))
-                    files.add(getDefaultProguardFile("proguard-android-optimize.txt"))
-
-                    // Depending on whether the app flavor is enterprise or not we want to use different proguard rules.
-                    val flavorProguardFile = if (isEnterpriseBuild) {
-                        // Custom rules for enterprise builds
-                        File(projectDir, "enterprise-proguard-rules.pro")
-                    } else {
-                        // These default rules prevent the OSS app from being obfuscated
-                        File(projectDir, "default-proguard-rules.pro")
-                    }
-
-                    if (flavorProguardFile.exists()) {
-                        files.add(flavorProguardFile)
-                    } else {
-                        logger.warn("Proguard file ${flavorProguardFile.absolutePath} does not exist")
-                    }
+                    // Equivalent of adding `getDefaultProguardFile("proguard-android-optimize.txt")` (this is the default value).
+                    includeDefault = true
                 }
+                // Our custom keep rules are registered as `keepRules` source folders in the `androidComponents` block below,
+                // as the former `keepRules.files` DSL is deprecated since AGP 9.
             }
         }
 
@@ -162,7 +146,7 @@ android {
             resValue(
                 "string",
                 "login_redirect_scheme",
-                "$oidcRedirectSchemeBase.nightly",
+                "$oAuthRedirectSchemeBase.nightly",
             )
             matchingFallbacks += listOf("release")
             signingConfig = signingConfigs.getByName("nightly")
@@ -194,6 +178,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        resValues = true
     }
     flavorDimensions += "store"
     productFlavors {
@@ -233,6 +218,30 @@ androidComponents {
     )
 
     onVariants { variant ->
+        // Register the R8 keep rules source folders for optimized build types (release, nightly).
+        // Replaces the deprecated `optimization.keepRules.files` DSL (AGP 9+).
+        if (variant.buildType != "debug") {
+            variant.sources.keepRules?.let { keepRules ->
+                // Common rules, always applied.
+                keepRules.addStaticSourceDirectory("proguard/common")
+
+                // Depending on whether the app flavor is enterprise or not we want to use different proguard rules.
+                val flavorProguardDir = if (isEnterpriseBuild) {
+                    // Custom rules for enterprise builds
+                    "../enterprise/proguard"
+                } else {
+                    // Custom fules for FOSS builds
+                    "proguard/foss"
+                }
+
+                if (File(projectDir, flavorProguardDir).exists()) {
+                    keepRules.addStaticSourceDirectory(flavorProguardDir)
+                } else {
+                    logger.warn("Proguard folder ${File(projectDir, flavorProguardDir).absolutePath} does not exist")
+                }
+            }
+        }
+
         // Assigns a different version code for each output APK
         // other than the universal APK.
         variant.outputs.forEach { output ->
@@ -250,24 +259,9 @@ androidComponents {
     configureLicensesTasks(reportingExtension)
 }
 
-// Knit
-apply {
-    plugin("kotlinx-knit")
-}
-
-knit {
-    files = fileTree(project.rootDir) {
-        include(
-            "**/*.md",
-            "**/*.kt",
-            "*/*.kts",
-        )
-        exclude(
-            "**/build/**",
-            "*/.gradle/**",
-            "**/CHANGES.md",
-        )
-    }
+// Configure the SonarQube plugin to wait for the resource generation tasks to complete before running the analysis.
+tasks.withType<SonarResolverTask>().configureEach {
+    dependsOn("generateGplayDebugResValues", "generateGplayDebugAndroidTestResValues")
 }
 
 setupDependencyInjection()
@@ -286,7 +280,6 @@ dependencies {
     implementation(projects.features.migration.api)
     implementation(projects.appnav)
     implementation(projects.appconfig)
-    implementation(projects.libraries.uiStrings)
     implementation(projects.services.analytics.compose)
 
     if (ModulesConfig.pushProvidersConfig.includeFirebase) {
@@ -296,28 +289,25 @@ dependencies {
         implementation(projects.libraries.pushproviders.unifiedpush)
     }
 
+    // Google Play Services fused location backend. Discovered at runtime via ServiceLoader by the
+    // location feature.
+    "gplayImplementation"(libs.maplibre.compose.location.runtime.gms)
+
     implementation(libs.appyx.core)
     implementation(libs.androidx.splash)
     implementation(libs.androidx.core)
     implementation(libs.androidx.corektx)
-    implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.startup)
     implementation(libs.androidx.preference)
-    implementation(libs.coil)
 
     implementation(platform(libs.network.okhttp.bom))
     implementation(libs.network.okhttp.logging)
-    implementation(libs.serialization.json)
-
-    implementation(libs.matrix.emojibase.bindings)
 
     testCommonDependencies(libs)
     testImplementation(projects.libraries.matrix.test)
     testImplementation(projects.services.toolbox.test)
-
-    koverDependencies()
 }
 
 tasks.withType<GenerateBuildConfig>().configureEach {
@@ -334,6 +324,8 @@ licensee {
     allow("BSD-2-Clause")
     allow("BSD-3-Clause")
     allow("EPL-1.0")
+    allowUrl("https://opensource.org/license/bsd-3-clause")
+    allowUrl("https://opensource.org/license/bsd-2-clause")
     allowUrl("https://opensource.org/licenses/MIT")
     allowUrl("https://developer.android.com/studio/terms.html")
     allowUrl("https://www.zetetic.net/sqlcipher/license/")
@@ -344,6 +336,9 @@ licensee {
     ignoreDependencies("com.github.matrix-org", "matrix-analytics-events")
     // Ignore dependency that are not third-party licenses to us.
     ignoreDependencies(groupId = "io.element.android")
+    // The rustls-platform-verifier dependency does not provide a license file in their maven repo, but there are MIT and Apache licenses in
+    // the source code repo: see https://github.com/rustls/rustls-platform-verifier
+    ignoreDependencies(groupId = "org.rustls", artifactId = "rustls-platform-verifier")
 }
 
 fun Project.configureLicensesTasks(reportingExtension: ReportingExtension) {

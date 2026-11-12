@@ -14,10 +14,10 @@ import io.element.android.libraries.matrix.test.A_USER_ID
 import org.matrix.rustcomponents.sdk.EventOrTransactionId
 import org.matrix.rustcomponents.sdk.EventSendState
 import org.matrix.rustcomponents.sdk.EventTimelineItem
-import org.matrix.rustcomponents.sdk.EventTimelineItemDebugInfo
+import org.matrix.rustcomponents.sdk.LazyTimelineItemProvider
 import org.matrix.rustcomponents.sdk.ProfileDetails
+import org.matrix.rustcomponents.sdk.Reaction
 import org.matrix.rustcomponents.sdk.Receipt
-import org.matrix.rustcomponents.sdk.ShieldState
 import org.matrix.rustcomponents.sdk.TimelineItemContent
 import uniffi.matrix_sdk_ui.EventItemOrigin
 
@@ -26,37 +26,41 @@ internal fun aRustEventTimelineItem(
     eventOrTransactionId: EventOrTransactionId = EventOrTransactionId.EventId(AN_EVENT_ID.value),
     sender: String = A_USER_ID.value,
     senderProfile: ProfileDetails = ProfileDetails.Unavailable,
+    forwarder: String? = null,
+    forwarderProfile: ProfileDetails? = null,
     isOwn: Boolean = true,
     isEditable: Boolean = true,
     content: TimelineItemContent = aRustTimelineItemContentMsgLike(),
+    eventTypeRaw: String? = null,
     timestamp: ULong = 0uL,
-    debugInfo: EventTimelineItemDebugInfo = anEventTimelineItemDebugInfo(),
     localSendState: EventSendState? = null,
+    localCreatedAt: ULong? = null,
     readReceipts: Map<String, Receipt> = emptyMap(),
     origin: EventItemOrigin? = EventItemOrigin.SYNC,
     canBeRepliedTo: Boolean = true,
-    shieldsState: ShieldState = ShieldState.None,
-    localCreatedAt: ULong? = null,
-    forwarder: String? = null,
-    forwarderProfile: ProfileDetails? = null,
+    reactions: List<Reaction> = emptyList(),
+    lazyProvider: LazyTimelineItemProvider = FakeFfiLazyTimelineItemProvider(),
+    editSendState: EventSendState? = null,
+    redactionSendState: EventSendState? = null,
 ) = EventTimelineItem(
     isRemote = isRemote,
     eventOrTransactionId = eventOrTransactionId,
     sender = sender,
     senderProfile = senderProfile,
-    timestamp = timestamp,
-    isOwn = isOwn,
-    isEditable = isEditable,
-    canBeRepliedTo = canBeRepliedTo,
-    content = content,
-    localSendState = localSendState,
-    readReceipts = readReceipts,
-    origin = origin,
-    localCreatedAt = localCreatedAt,
-    lazyProvider = FakeFfiLazyTimelineItemProvider(
-        debugInfo = debugInfo,
-        shieldsState = shieldsState,
-    ),
     forwarder = forwarder,
     forwarderProfile = forwarderProfile,
+    isOwn = isOwn,
+    isEditable = isEditable,
+    content = content,
+    eventTypeRaw = eventTypeRaw,
+    timestamp = timestamp,
+    localSendState = localSendState,
+    localCreatedAt = localCreatedAt,
+    readReceipts = readReceipts,
+    origin = origin,
+    canBeRepliedTo = canBeRepliedTo,
+    reactions = reactions,
+    lazyProvider = lazyProvider,
+    editSendState = editSendState,
+    redactionSendState = redactionSendState,
 )

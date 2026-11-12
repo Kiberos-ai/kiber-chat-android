@@ -13,21 +13,23 @@ plugins {
 }
 
 android {
-    namespace = "io.element.android.libraries.matrix.ui.media.impl"
+    namespace = "io.element.android.libraries.matrixmedia.impl"
 }
 
 setupDependencyInjection()
 
 dependencies {
+    implementation(projects.libraries.architecture)
     implementation(projects.libraries.matrix.api)
     implementation(projects.libraries.matrixmedia.api)
+    implementation(projects.libraries.sessionStorage.api)
     implementation(projects.libraries.designsystem)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
+    implementation(libs.coil.svg)
     implementation(libs.coil.network.okhttp)
 
     testCommonDependencies(libs, true)
     testImplementation(projects.libraries.matrix.test)
-    testImplementation(projects.libraries.dateformatter.test)
     testImplementation(projects.libraries.sessionStorage.test)
 }

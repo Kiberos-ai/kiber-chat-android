@@ -124,7 +124,7 @@ class RustSessionVerificationService(
         this.listener = listener
     }
 
-    override suspend fun requestCurrentSessionVerification() = tryOrFail {
+    override suspend fun requestDeviceVerification() = tryOrFail {
         ensureEncryptionIsInitialized()
         verificationController.requestDeviceVerification()
         currentVerificationRequest = VerificationRequest.Outgoing.CurrentSession
@@ -146,7 +146,7 @@ class RustSessionVerificationService(
 
     override suspend fun declineVerification() = tryOrFail { verificationController.declineVerification() }
 
-    override suspend fun startVerification() = tryOrFail {
+    override suspend fun startSasVerification() = tryOrFail {
         verificationController.startSasVerification()
     }
 
@@ -245,6 +245,7 @@ class RustSessionVerificationService(
 
     fun destroy() {
         Timber.d("Destroying RustSessionVerificationService")
+        listener = null
         verificationStateListenerTaskHandle.cancelAndDestroy()
         recoveryStateListenerTaskHandle.cancelAndDestroy()
         if (this::verificationController.isInitialized) {
@@ -266,6 +267,9 @@ class RustSessionVerificationService(
             if (!isInitialized.get()) {
                 encryptionService.waitForE2eeInitializationTasks()
                 isInitialized.set(true)
+                // Also update the state, because update may have been ignored by VerificationStateListener.onUpdate
+                // If we do not do that the FTUE is stuck on blank screen.
+                updateVerificationStatus()
             }
 
             if (!this::verificationController.isInitialized) {

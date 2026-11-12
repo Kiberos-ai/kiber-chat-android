@@ -10,6 +10,7 @@ package io.element.android.features.home.impl.spaces
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -48,14 +49,15 @@ import kotlinx.collections.immutable.toImmutableList
 fun HomeSpacesView(
     state: HomeSpacesState,
     lazyListState: LazyListState,
+    contentPadding: PaddingValues,
     onSpaceClick: (RoomId) -> Unit,
     onCreateSpaceClick: () -> Unit,
     onExploreClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (state.canCreateSpaces && state.spaceRooms.isEmpty()) {
+    if (state.spaceRooms.isEmpty()) {
         EmptySpaceHomeView(
-            modifier = modifier,
+            modifier = modifier.padding(contentPadding),
             onCreateSpaceClick = onCreateSpaceClick,
             onExploreClick = onExploreClick,
             canExploreSpaces = state.canExploreSpaces,
@@ -63,7 +65,8 @@ fun HomeSpacesView(
     } else {
         LazyColumn(
             modifier = modifier,
-            state = lazyListState
+            state = lazyListState,
+            contentPadding = contentPadding,
         ) {
             val space = state.space
             when (space) {
@@ -115,6 +118,9 @@ fun HomeSpacesView(
     }
 }
 
+/**
+ * Ref: https://www.figma.com/design/pDlJZGBsri47FNTXMnEdXB/Compound-Android-Templates?node-id=1763-74215&t=9IGKMXHDfTGAqzQK-4
+ */
 @Composable
 private fun EmptySpaceHomeView(
     onCreateSpaceClick: () -> Unit,
@@ -137,7 +143,7 @@ private fun EmptySpaceHomeView(
                 )
                 Text(
                     text = stringResource(CommonStrings.screen_space_list_empty_state_title),
-                    style = ElementTheme.typography.fontHeadingLgBold,
+                    style = ElementTheme.typography.fontHeadingMdBold,
                     color = ElementTheme.colors.textPrimary,
                     textAlign = TextAlign.Center,
                 )
@@ -159,14 +165,13 @@ private fun EmptySpaceHomeView(
                 }
             }
         }
-    ) {
-    }
+    )
 }
 
 @PreviewsDayNight
 @Composable
 internal fun HomeSpacesViewPreview(
-    @PreviewParameter(HomeSpacesStateProvider::class) state: HomeSpacesState,
+    @PreviewParameter(HomeSpacesStatePreviewParam::class) state: HomeSpacesState,
 ) = ElementPreview {
     HomeSpacesView(
         state = state,
@@ -174,5 +179,6 @@ internal fun HomeSpacesViewPreview(
         onSpaceClick = {},
         onCreateSpaceClick = {},
         onExploreClick = {},
+        contentPadding = PaddingValues(bottom = 112.dp),
     )
 }

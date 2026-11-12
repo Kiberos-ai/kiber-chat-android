@@ -17,10 +17,8 @@ android {
 
 dependencies {
     implementation(projects.libraries.architecture)
-    implementation(projects.libraries.core)
 
     api(projects.features.call.api)
-    implementation(projects.features.call.impl)
     implementation(projects.libraries.matrix.api)
     implementation(projects.libraries.matrix.test)
     implementation(projects.tests.testutils)

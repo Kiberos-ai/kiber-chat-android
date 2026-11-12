@@ -19,9 +19,13 @@ import io.element.android.features.messages.api.timeline.voicemessages.composer.
 import io.element.android.features.messages.api.timeline.voicemessages.composer.VoiceMessageComposerState
 import io.element.android.features.messages.impl.messagecomposer.aReplyMode
 import io.element.android.features.messages.test.FakeMessageComposerContext
+import io.element.android.libraries.audio.api.AudioFocus
+import io.element.android.libraries.audio.api.AudioFocusRequester
+import io.element.android.libraries.audio.test.FakeAudioFocus
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.media.AudioInfo
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.test.AN_EVENT_ID
 import io.element.android.libraries.matrix.test.media.FakeMediaUploadHandler
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.timeline.FakeTimeline
@@ -43,7 +47,9 @@ import io.element.android.libraries.voicerecorder.api.VoiceRecorder
 import io.element.android.libraries.voicerecorder.test.FakeVoiceRecorder
 import io.element.android.services.analytics.test.FakeAnalyticsService
 import io.element.android.tests.testutils.WarmUpRule
+import io.element.android.tests.testutils.lambda.any
 import io.element.android.tests.testutils.lambda.lambdaRecorder
+import io.element.android.tests.testutils.lambda.value
 import io.element.android.tests.testutils.test
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -54,14 +60,21 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class DefaultVoiceMessageComposerPresenterTest {
     @get:Rule
     val warmUpRule = WarmUpRule()
 
+    private val startRecordResult = lambdaRecorder<Unit> { }
+    private val stopRecordResult = lambdaRecorder<Boolean, Unit> { }
+    private val deleteRecordingResult = lambdaRecorder<Unit> { }
     private val voiceRecorder = FakeVoiceRecorder(
-        recordingDuration = RECORDING_DURATION
+        recordingDuration = RECORDING_DURATION,
+        startRecordResult = startRecordResult,
+        stopRecordResult = stopRecordResult,
+        deleteRecordingResult = deleteRecordingResult,
     )
     private val analyticsService = FakeAnalyticsService()
     private val sendVoiceMessageResult =
@@ -80,11 +93,20 @@ class DefaultVoiceMessageComposerPresenterTest {
         timelineMode = Timeline.Mode.Live,
         mediaOptimizationConfigProvider = { MediaOptimizationConfig(compressImages = true, videoCompressionPreset = VideoCompressionPreset.STANDARD) },
     )
+    private val requestAudioFocusResult = lambdaRecorder<AudioFocusRequester, () -> Unit, Unit> { _, _ -> }
+    private val releaseAudioFocusResult = lambdaRecorder<Unit> { }
+    private val audioFocus: AudioFocus = FakeAudioFocus(
+        requestAudioFocusResult = requestAudioFocusResult,
+        releaseAudioFocusResult = releaseAudioFocusResult,
+    )
     private val messageComposerContext = FakeMessageComposerContext()
 
     companion object {
         private val RECORDING_DURATION = 1.seconds
+        private val PLAYER_DURATION = 10.seconds
+        private val FIRST_LEVEL_DURATION = 500.milliseconds
         private val RECORDING_STATE = VoiceMessageState.Recording(RECORDING_DURATION, listOf(0.1f, 0.2f).toImmutableList())
+        private val FIRST_RECORDING_STATE = VoiceMessageState.Recording(FIRST_LEVEL_DURATION, listOf(0.1f).toImmutableList())
     }
 
     @Test
@@ -93,7 +115,7 @@ class DefaultVoiceMessageComposerPresenterTest {
         presenter.test {
             val initialState = awaitItem()
             assertThat(initialState.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
-            voiceRecorder.assertCalls(started = 0)
+            startRecordResult.assertions().isNeverCalled()
 
             testPauseAndDestroy(initialState)
         }
@@ -105,9 +127,10 @@ class DefaultVoiceMessageComposerPresenterTest {
         presenter.test {
             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
 
+            assertThat(awaitItem().voiceMessageState).isEqualTo(FIRST_RECORDING_STATE)
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(RECORDING_STATE)
-            voiceRecorder.assertCalls(started = 1)
+            startRecordResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(finalState)
         }
@@ -120,13 +143,18 @@ class DefaultVoiceMessageComposerPresenterTest {
         val voiceRecorder = FakeVoiceRecorder(
             levels = levels,
             recordingDuration = RECORDING_DURATION,
+            startRecordResult = { },
+            stopRecordResult = { },
+            deleteRecordingResult = { },
         )
         val presenter = createDefaultVoiceMessageComposerPresenter(
             voiceRecorder = voiceRecorder,
         )
         presenter.test {
             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
-            skipItems(numberOfLevels / 2 - 1)
+
+            // Skip until we reach the final state, which should have the last 128 levels
+            skipItems(numberOfLevels - 1)
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isInstanceOf(VoiceMessageState.Recording::class.java)
             val recordingState = finalState.voiceMessageState as VoiceMessageState.Recording
@@ -160,6 +188,62 @@ class DefaultVoiceMessageComposerPresenterTest {
     }
 
     @Test
+    fun `present - recording requests audio focus and releases on stop`() = runTest {
+        val presenter = createDefaultVoiceMessageComposerPresenter()
+        presenter.test {
+            awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+            val recordingState = awaitItem()
+            requestAudioFocusResult.assertions().isCalledOnce()
+            releaseAudioFocusResult.assertions().isNeverCalled()
+
+            recordingState.eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Stop))
+            awaitItem()
+            releaseAudioFocusResult.assertions().isCalledOnce()
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - cancelling recording releases audio focus`() = runTest {
+        val presenter = createDefaultVoiceMessageComposerPresenter()
+        presenter.test {
+            awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+            awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Cancel))
+            awaitItem()
+            requestAudioFocusResult.assertions().isCalledOnce()
+            releaseAudioFocusResult.assertions().isCalledOnce()
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - audio focus loss during recording finishes gracefully`() = runTest {
+        var onFocusLost: (() -> Unit)? = null
+        val testAudioFocus = FakeAudioFocus(
+            requestAudioFocusResult = { _, callback -> onFocusLost = callback },
+            releaseAudioFocusResult = { },
+        )
+        val presenter = createDefaultVoiceMessageComposerPresenter(audioFocus = testAudioFocus)
+        presenter.test {
+            awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+            awaitItem()
+
+            // simulate focus loss (phone call, etc)
+            onFocusLost?.invoke()
+            advanceUntilIdle()
+
+            val finalState = awaitItem()
+            assertThat(finalState.voiceMessageState).isEqualTo(aPreviewState())
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `present - abort recording`() = runTest {
         val presenter = createDefaultVoiceMessageComposerPresenter()
         presenter.test {
@@ -167,7 +251,9 @@ class DefaultVoiceMessageComposerPresenterTest {
             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Cancel))
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 1)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(true))
+            deleteRecordingResult.assertions().isCalledOnce()
             testPauseAndDestroy(finalState)
         }
     }
@@ -181,7 +267,10 @@ class DefaultVoiceMessageComposerPresenterTest {
 
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(aPreviewState())
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 0)
+            assertThat((finalState.voiceMessageState as VoiceMessageState.Preview).duration).isEqualTo(RECORDING_DURATION)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+            deleteRecordingResult.assertions().isNeverCalled()
 
             testPauseAndDestroy(finalState)
         }
@@ -197,8 +286,10 @@ class DefaultVoiceMessageComposerPresenterTest {
             }
 
             // Nothing should happen
-            assertThat(finalState.voiceMessageState).isEqualTo(RECORDING_STATE)
-            voiceRecorder.assertCalls(started = 1, stopped = 0, deleted = 0)
+            assertThat(finalState.voiceMessageState).isEqualTo(FIRST_RECORDING_STATE)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isNeverCalled()
+            deleteRecordingResult.assertions().isNeverCalled()
 
             testPauseAndDestroy(finalState)
         }
@@ -213,8 +304,11 @@ class DefaultVoiceMessageComposerPresenterTest {
             awaitItem().eventSink(VoiceMessageComposerEvent.PlayerEvent(VoiceMessagePlayerEvent.Play))
             val finalState = awaitItem().also {
                 assertThat(it.voiceMessageState).isEqualTo(aPlayingState())
+                assertThat((it.voiceMessageState as VoiceMessageState.Preview).duration).isEqualTo(PLAYER_DURATION)
             }
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 0)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+            deleteRecordingResult.assertions().isNeverCalled()
 
             testPauseAndDestroy(finalState)
         }
@@ -231,7 +325,9 @@ class DefaultVoiceMessageComposerPresenterTest {
             val finalState = awaitItem().also {
                 assertThat(it.voiceMessageState).isEqualTo(aPausedState())
             }
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 0)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+            deleteRecordingResult.assertions().isNeverCalled()
 
             testPauseAndDestroy(finalState)
         }
@@ -245,17 +341,30 @@ class DefaultVoiceMessageComposerPresenterTest {
             awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Stop))
             awaitItem().eventSink(VoiceMessageComposerEvent.PlayerEvent(VoiceMessagePlayerEvent.Seek(0.5f)))
             awaitItem().apply {
-                assertThat(voiceMessageState).isEqualTo(aPreviewState(playbackProgress = 0.5f, time = 0.seconds, showCursor = true))
+                assertThat(voiceMessageState).isEqualTo(
+                    aPreviewState(playbackProgress = 0.5f, time = 0.seconds, showCursor = true)
+                )
             }
             awaitItem().apply {
-                assertThat(voiceMessageState).isEqualTo(aPreviewState(playbackProgress = 0.5f, time = 5.seconds, showCursor = true))
+                assertThat(voiceMessageState).isEqualTo(
+                    aPreviewState(playbackProgress = 0.5f, time = 0.seconds, showCursor = true, duration = PLAYER_DURATION)
+                )
+            }
+            awaitItem().apply {
+                assertThat(voiceMessageState).isEqualTo(
+                    aPreviewState(playbackProgress = 0.5f, time = 5.seconds, showCursor = true, duration = PLAYER_DURATION)
+                )
                 eventSink(VoiceMessageComposerEvent.PlayerEvent(VoiceMessagePlayerEvent.Seek(0.2f)))
             }
             awaitItem().apply {
-                assertThat(voiceMessageState).isEqualTo(aPreviewState(playbackProgress = 0.2f, time = 5.seconds, showCursor = true))
+                assertThat(voiceMessageState).isEqualTo(
+                    aPreviewState(playbackProgress = 0.2f, time = 5.seconds, showCursor = true, duration = PLAYER_DURATION)
+                )
             }
             val finalState = awaitItem().apply {
-                assertThat(voiceMessageState).isEqualTo(aPreviewState(playbackProgress = 0.2f, time = 2.seconds, showCursor = true))
+                assertThat(voiceMessageState).isEqualTo(
+                    aPreviewState(playbackProgress = 0.2f, time = 2.seconds, showCursor = true, duration = PLAYER_DURATION)
+                )
             }
 
             testPauseAndDestroy(finalState)
@@ -272,7 +381,9 @@ class DefaultVoiceMessageComposerPresenterTest {
 
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 1)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+            deleteRecordingResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(finalState)
         }
@@ -292,7 +403,9 @@ class DefaultVoiceMessageComposerPresenterTest {
 
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 1)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+            deleteRecordingResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(finalState)
         }
@@ -309,7 +422,9 @@ class DefaultVoiceMessageComposerPresenterTest {
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
             sendVoiceMessageResult.assertions().isCalledOnce()
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 1)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+            deleteRecordingResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(finalState)
         }
@@ -343,6 +458,37 @@ class DefaultVoiceMessageComposerPresenterTest {
     }
 
     @Test
+    fun `present - send voice message passes reply event ID only when in reply mode`() = runTest {
+        val presenter = createDefaultVoiceMessageComposerPresenter()
+        presenter.test {
+            // First send in Normal mode (default composerMode).
+            awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+            awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Stop))
+            awaitItem().eventSink(VoiceMessageComposerEvent.SendVoiceMessage)
+            assertThat(awaitItem().voiceMessageState).isEqualTo(aPreviewState().toSendingState())
+            val idleAfterFirstSend = awaitItem()
+            assertThat(idleAfterFirstSend.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
+
+            // Switching to reply mode does not trigger recomposition, so reuse the prior eventSink.
+            messageComposerContext.composerMode = aReplyMode()
+            idleAfterFirstSend.eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
+            awaitItem().eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Stop))
+            awaitItem().eventSink(VoiceMessageComposerEvent.SendVoiceMessage)
+            assertThat(awaitItem().voiceMessageState).isEqualTo(aPreviewState().toSendingState())
+            val finalState = awaitItem()
+            assertThat(finalState.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
+
+            sendVoiceMessageResult.assertions().isCalledExactly(2)
+                .withSequence(
+                    listOf(any(), any(), any(), value(null)),
+                    listOf(any(), any(), any(), value(AN_EVENT_ID)),
+                )
+
+            testPauseAndDestroy(finalState)
+        }
+    }
+
+    @Test
     fun `present - send while playing`() = runTest {
         val presenter = createDefaultVoiceMessageComposerPresenter()
         presenter.test {
@@ -356,7 +502,9 @@ class DefaultVoiceMessageComposerPresenterTest {
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
             sendVoiceMessageResult.assertions().isCalledOnce()
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 1)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+            deleteRecordingResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(finalState)
         }
@@ -377,7 +525,9 @@ class DefaultVoiceMessageComposerPresenterTest {
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
             sendVoiceMessageResult.assertions().isCalledOnce()
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 1)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+            deleteRecordingResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(finalState)
         }
@@ -400,7 +550,9 @@ class DefaultVoiceMessageComposerPresenterTest {
             assertThat(finalState.voiceMessageState).isEqualTo(aPreviewState(isSending = true))
             sendVoiceMessageResult.assertions().isNeverCalled()
             assertThat(analyticsService.trackedErrors).isEmpty()
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 0)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+            deleteRecordingResult.assertions().isNeverCalled()
 
             testPauseAndDestroy(finalState)
         }
@@ -428,7 +580,9 @@ class DefaultVoiceMessageComposerPresenterTest {
             val finalState = awaitItem()
             assertThat(finalState.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
             sendVoiceMessageResult.assertions().isCalledOnce()
-            voiceRecorder.assertCalls(started = 1, stopped = 1, deleted = 1)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
+            deleteRecordingResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(finalState)
         }
@@ -478,7 +632,7 @@ class DefaultVoiceMessageComposerPresenterTest {
             assertThat(initialState.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
             sendVoiceMessageResult.assertions().isNeverCalled()
             assertThat(analyticsService.trackedErrors).hasSize(1)
-            voiceRecorder.assertCalls(started = 0)
+            startRecordResult.assertions().isNeverCalled()
 
             testPauseAndDestroy(initialState)
         }
@@ -487,8 +641,14 @@ class DefaultVoiceMessageComposerPresenterTest {
     @Test
     fun `present - record error - security exceptions are tracked`() = runTest {
         val exception = SecurityException("")
-        voiceRecorder.givenThrowsSecurityException(exception)
-        val presenter = createDefaultVoiceMessageComposerPresenter()
+        val startRecordResult = lambdaRecorder<Unit> { throw exception }
+        val voiceRecorder = FakeVoiceRecorder(
+            recordingDuration = RECORDING_DURATION,
+            startRecordResult = startRecordResult,
+        )
+        val presenter = createDefaultVoiceMessageComposerPresenter(
+            voiceRecorder = voiceRecorder,
+        )
         presenter.test {
             val initialState = awaitItem()
             initialState.eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Start))
@@ -497,7 +657,7 @@ class DefaultVoiceMessageComposerPresenterTest {
             assertThat(analyticsService.trackedErrors).containsExactly(
                 VoiceMessageException.PermissionMissing(message = "Expected permission to record but none", cause = exception)
             )
-            voiceRecorder.assertCalls(started = 1)
+            startRecordResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(initialState)
         }
@@ -517,7 +677,8 @@ class DefaultVoiceMessageComposerPresenterTest {
             assertThat(awaitItem().voiceMessageState).isEqualTo(VoiceMessageState.Idle)
 
             initialState.eventSink(VoiceMessageComposerEvent.RecorderEvent(VoiceMessageRecorderEvent.Stop))
-            voiceRecorder.assertCalls(stopped = 1)
+            startRecordResult.assertions().isNeverCalled()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
 
             permissionsPresenter.setPermissionGranted()
 
@@ -526,7 +687,8 @@ class DefaultVoiceMessageComposerPresenterTest {
 
             val finalState = expectMostRecentItem()
             assertThat(finalState.voiceMessageState).isEqualTo(RECORDING_STATE)
-            voiceRecorder.assertCalls(stopped = 1, started = 1)
+            startRecordResult.assertions().isCalledOnce()
+            stopRecordResult.assertions().isCalledOnce().with(value(false))
 
             testPauseAndDestroy(finalState)
         }
@@ -560,7 +722,7 @@ class DefaultVoiceMessageComposerPresenterTest {
 
             val finalState = expectMostRecentItem()
             assertThat(finalState.voiceMessageState).isEqualTo(RECORDING_STATE)
-            voiceRecorder.assertCalls(started = 1)
+            startRecordResult.assertions().isCalledOnce()
 
             testPauseAndDestroy(finalState)
         }
@@ -597,7 +759,7 @@ class DefaultVoiceMessageComposerPresenterTest {
                 assertThat(it.voiceMessageState).isEqualTo(VoiceMessageState.Idle)
                 assertThat(it.showPermissionRationaleDialog).isTrue()
             }
-            voiceRecorder.assertCalls(started = 0)
+            startRecordResult.assertions().isNeverCalled()
 
             cancelAndIgnoreRemainingEvents()
             testPauseAndDestroy(finalState)
@@ -647,12 +809,14 @@ class DefaultVoiceMessageComposerPresenterTest {
     private fun TestScope.createDefaultVoiceMessageComposerPresenter(
         permissionsPresenter: PermissionsPresenter = createFakePermissionsPresenter(),
         voiceRecorder: VoiceRecorder = this@DefaultVoiceMessageComposerPresenterTest.voiceRecorder,
+        audioFocus: AudioFocus = this@DefaultVoiceMessageComposerPresenterTest.audioFocus,
     ): DefaultVoiceMessageComposerPresenter {
         return DefaultVoiceMessageComposerPresenter(
             sessionCoroutineScope = backgroundScope,
             timelineMode = Timeline.Mode.Live,
             voiceRecorder = voiceRecorder,
             analyticsService = analyticsService,
+            audioFocus = audioFocus,
             mediaSenderFactory = { mediaSender },
             player = VoiceMessageComposerPlayer(FakeMediaPlayer(), this),
             messageComposerContext = messageComposerContext,
@@ -679,6 +843,7 @@ class DefaultVoiceMessageComposerPresenterTest {
         playbackProgress: Float = 0f,
         isSending: Boolean = false,
         time: Duration = RECORDING_DURATION,
+        duration: Duration = RECORDING_DURATION,
         showCursor: Boolean = false,
         waveform: List<Float> = voiceRecorder.waveform,
     ) = VoiceMessageState.Preview(
@@ -686,6 +851,7 @@ class DefaultVoiceMessageComposerPresenterTest {
         playbackProgress = playbackProgress,
         isSending = isSending,
         time = time,
+        duration = duration,
         showCursor = showCursor,
         waveform = waveform.toImmutableList(),
     )
@@ -696,6 +862,7 @@ class DefaultVoiceMessageComposerPresenterTest {
             playbackProgress = 0.1f,
             showCursor = true,
             time = RECORDING_DURATION,
+            duration = PLAYER_DURATION,
         )
 
     private fun aPausedState() =

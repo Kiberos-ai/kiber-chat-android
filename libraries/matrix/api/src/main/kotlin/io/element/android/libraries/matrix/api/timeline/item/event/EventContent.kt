@@ -12,8 +12,11 @@ import androidx.compose.runtime.Immutable
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.media.ImageInfo
 import io.element.android.libraries.matrix.api.media.MediaSource
+import io.element.android.libraries.matrix.api.notification.CallIntent
 import io.element.android.libraries.matrix.api.poll.PollAnswer
 import io.element.android.libraries.matrix.api.poll.PollKind
+import io.element.android.libraries.matrix.api.room.location.AssetType
+import io.element.android.libraries.matrix.api.room.location.LiveLocationInfo
 import io.element.android.libraries.matrix.api.timeline.item.EventThreadInfo
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
@@ -29,7 +32,9 @@ data class MessageContent(
     val type: MessageType,
 ) : EventContent
 
-data object RedactedContent : EventContent
+data class RedactedContent(
+    val threadInfo: EventThreadInfo?,
+) : EventContent
 
 data class StickerContent(
     val filename: String,
@@ -102,8 +107,56 @@ data class FailedToParseStateContent(
     val error: String
 ) : EventContent
 
+data class LiveLocationContent(
+    val isLive: Boolean,
+    val description: String?,
+    val startTimestamp: Long,
+    val timeout: Long,
+    val assetType: AssetType?,
+    val locations: List<LiveLocationInfo>,
+) : EventContent {
+    val endTimestamp = startTimestamp + timeout
+}
+
 data object LegacyCallInviteContent : EventContent
 
-data object CallNotifyContent : EventContent
+data class CallNotifyContent(
+    val callIntent: CallIntent,
+    val declinedBy: List<UserId>,
+    val activeMembers: List<UserId>,
+    val isJoined: Boolean,
+    val callStartTsMillis: Long?,
+) : EventContent
 
 data object UnknownContent : EventContent
+
+fun EventContent.isMediaContent(): Boolean {
+    return when (this) {
+        is MessageContent -> type is MessageTypeWithAttachment || type is GalleryMessageType
+        is StickerContent -> true
+        else -> false
+    }
+}
+
+fun EventContent.mediaSources(): List<MediaSource> {
+    return when (this) {
+        is MessageContent -> mediaSources()
+        is StickerContent -> listOfNotNull(source, info.thumbnailSource)
+        else -> emptyList()
+    }
+}
+
+fun MessageContent.mediaSources(): List<MediaSource> {
+    return when (val messageType = type) {
+        is MessageTypeWithAttachment -> when (messageType) {
+            is ImageMessageType -> listOfNotNull(messageType.source, messageType.info?.thumbnailSource)
+            is VideoMessageType -> listOfNotNull(messageType.source, messageType.info?.thumbnailSource)
+            is AudioMessageType -> listOf(messageType.source)
+            is VoiceMessageType -> listOf(messageType.source)
+            is FileMessageType -> listOfNotNull(messageType.source, messageType.info?.thumbnailSource)
+            else -> emptyList()
+        }
+        is GalleryMessageType -> messageType.items.flatMap { it.mediaSources() }
+        else -> emptyList()
+    }
+}

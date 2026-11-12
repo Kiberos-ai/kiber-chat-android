@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -40,7 +39,6 @@ import io.element.android.libraries.designsystem.theme.components.TopAppBar
  * - a content.
  * - a footer, as ButtonColumnMolecule
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FlowStepPage(
     iconStyle: BigIcon.Style,
@@ -71,7 +69,7 @@ fun FlowStepPage(
         },
         header = {
             IconTitleSubtitleMolecule(
-                modifier = Modifier.padding(bottom = 16.dp),
+                modifier = Modifier.padding(bottom = 16.dp, start = 8.dp, end = 8.dp),
                 title = title,
                 subTitle = subTitle,
                 iconStyle = iconStyle,

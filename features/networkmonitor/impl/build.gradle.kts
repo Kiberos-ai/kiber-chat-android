@@ -1,4 +1,5 @@
 import extension.setupDependencyInjection
+import extension.testCommonDependencies
 
 /*
  * Copyright (c) 2025 Element Creations Ltd.
@@ -20,7 +21,8 @@ android {
 
 dependencies {
     implementation(libs.coroutines.core)
-    implementation(projects.libraries.core)
     implementation(projects.libraries.di)
     api(projects.features.networkmonitor.api)
+
+    testCommonDependencies(libs)
 }

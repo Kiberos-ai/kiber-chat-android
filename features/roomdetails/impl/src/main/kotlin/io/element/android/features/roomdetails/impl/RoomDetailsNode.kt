@@ -24,11 +24,13 @@ import dev.zacsweers.metro.AssistedInject
 import im.vector.app.features.analytics.plan.MobileScreen
 import io.element.android.annotations.ContributesNode
 import io.element.android.features.leaveroom.api.LeaveRoomRenderer
+import io.element.android.features.roomdetails.api.RoomDetailsExtension
 import io.element.android.libraries.androidutils.system.startSharePlainTextIntent
 import io.element.android.libraries.architecture.appyx.launchMolecule
 import io.element.android.libraries.architecture.callback
 import io.element.android.libraries.di.RoomScope
 import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.notification.CallIntent
 import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.services.analytics.api.AnalyticsService
 import kotlinx.coroutines.CoroutineScope
@@ -41,12 +43,14 @@ import io.element.android.libraries.androidutils.R as AndroidUtilsR
 class RoomDetailsNode(
     @Assisted buildContext: BuildContext,
     @Assisted plugins: List<Plugin>,
-    private val presenter: RoomDetailsPresenter,
+    presenterFactory: RoomDetailsPresenter.Factory,
     private val room: BaseRoom,
     private val analyticsService: AnalyticsService,
     private val leaveRoomRenderer: LeaveRoomRenderer,
-) : Node(buildContext, plugins = plugins) {
+    private val roomDetailsExtension: RoomDetailsExtension,
+) : Node(buildContext, plugins = plugins), RoomDetailsNavigator {
     interface Callback : Plugin {
+        fun navigateBack()
         fun navigateToRoomMemberList()
         fun navigateToInviteMembers()
         fun navigateToRoomDetailsEdit()
@@ -59,11 +63,12 @@ class RoomDetailsNode(
         fun navigateToKnockRequestsList()
         fun navigateToSecurityAndPrivacy()
         fun navigateToRoomMemberDetails(userId: UserId)
-        fun navigateToRoomCall()
+        fun navigateToRoomCall(callIntent: CallIntent)
         fun navigateToReportRoom()
         fun navigateToSelectNewOwnersWhenLeaving()
     }
 
+    private val presenter = presenterFactory.create(this)
     private val callback: Callback = callback()
 
     init {
@@ -117,6 +122,7 @@ class RoomDetailsNode(
 
         RoomDetailsView(
             state = state,
+            additionalSections = { with(roomDetailsExtension) { Render(Modifier) } },
             modifier = modifier,
             goBack = ::navigateUp,
             onActionClick = ::onActionClick,
@@ -142,5 +148,9 @@ class RoomDetailsNode(
                 )
             }
         )
+    }
+
+    override fun onDone() {
+        callback.navigateBack()
     }
 }

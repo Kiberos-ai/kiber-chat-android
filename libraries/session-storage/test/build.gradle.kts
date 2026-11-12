@@ -14,6 +14,6 @@ android {
 }
 
 dependencies {
-    implementation(projects.libraries.matrix.api)
+    implementation(libs.coroutines.core)
     implementation(projects.libraries.sessionStorage.api)
 }

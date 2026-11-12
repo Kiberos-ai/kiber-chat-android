@@ -12,6 +12,7 @@ import io.element.android.libraries.matrix.api.linknewdevice.LinkDesktopHandler
 import io.element.android.libraries.matrix.api.linknewdevice.LinkDesktopStep
 import io.element.android.libraries.matrix.api.logs.LoggerTags
 import io.element.android.libraries.matrix.impl.auth.qrlogin.QrErrorMapper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,7 +54,16 @@ class RustLinkDesktopHandler(
                         }
                     }
                 }
-            )
+            ).use { task ->
+                try {
+                    task.wait()
+                } catch (e: CancellationException) {
+                    task.cancel()
+                    throw e
+                }
+            }
+            // We emit Done in case the progress listener was deallocated before the task sent the Done
+            _linkDesktopStep.emit(LinkDesktopStep.Done)
         } catch (e: QrCodeDecodeException) {
             Timber.tag(tag.value).w(e, "Invalid QR code scanned")
             _linkDesktopStep.emit(
@@ -73,6 +83,10 @@ class RustLinkDesktopHandler(
         GrantQrLoginProgress.SyncingSecrets -> LinkDesktopStep.SyncingSecrets
         is GrantQrLoginProgress.WaitingForAuth -> LinkDesktopStep.WaitingForAuth(
             verificationUri = verificationUri,
+            continuationMessageSender = RustContinuationMessageSender(
+                inner = continuationSender,
+                sessionDispatcher = sessionDispatcher,
+            )
         )
         is GrantQrLoginProgress.EstablishingSecureChannel -> LinkDesktopStep.EstablishingSecureChannel(
             checkCode = checkCode,

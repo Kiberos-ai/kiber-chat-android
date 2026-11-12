@@ -13,6 +13,7 @@ import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.TransactionId
 import io.element.android.libraries.matrix.api.media.AudioInfo
 import io.element.android.libraries.matrix.api.media.FileInfo
+import io.element.android.libraries.matrix.api.media.GalleryItemInfo
 import io.element.android.libraries.matrix.api.media.ImageInfo
 import io.element.android.libraries.matrix.api.media.MediaUploadHandler
 import io.element.android.libraries.matrix.api.media.VideoInfo
@@ -20,8 +21,10 @@ import io.element.android.libraries.matrix.api.poll.PollKind
 import io.element.android.libraries.matrix.api.room.IntentionalMention
 import io.element.android.libraries.matrix.api.room.location.AssetType
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
+import io.element.android.libraries.matrix.api.timeline.MsgType
 import io.element.android.libraries.matrix.api.timeline.ReceiptType
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.api.timeline.item.SendTarget
 import io.element.android.libraries.matrix.api.timeline.item.event.EventOrTransactionId
 import io.element.android.libraries.matrix.api.timeline.item.event.InReplyTo
 import io.element.android.libraries.matrix.test.media.FakeMediaUploadHandler
@@ -58,13 +61,17 @@ class FakeTimeline(
         receiptType: ReceiptType,
     ) -> Result<Unit> = { _, _ ->
         lambdaError()
-    }
+    },
+    private val retrySendResult: (eventOrTransactionId: EventOrTransactionId) -> Result<Boolean> = { lambdaError() },
+    private val abortSendResult: (eventOrTransactionId: EventOrTransactionId) -> Result<Boolean> = { lambdaError() },
 ) : Timeline {
     var sendMessageLambda: (
         body: String,
         htmlBody: String?,
         intentionalMentions: List<IntentionalMention>,
-    ) -> Result<Unit> = { _, _, _ ->
+        msgType: MsgType,
+        asPlainText: Boolean,
+    ) -> Result<Unit> = { _, _, _, _, _ ->
         lambdaError()
     }
 
@@ -76,8 +83,10 @@ class FakeTimeline(
         body: String,
         htmlBody: String?,
         intentionalMentions: List<IntentionalMention>,
+        msgType: MsgType,
+        asPlainText: Boolean,
     ): Result<Unit> = simulateLongTask {
-        sendMessageLambda(body, htmlBody, intentionalMentions)
+        sendMessageLambda(body, htmlBody, intentionalMentions, msgType, asPlainText)
     }
 
     var redactEventLambda: (eventOrTransactionId: EventOrTransactionId, reason: String?) -> Result<Unit> = { _, _ ->
@@ -134,7 +143,8 @@ class FakeTimeline(
         htmlBody: String?,
         intentionalMentions: List<IntentionalMention>,
         fromNotification: Boolean,
-    ) -> Result<Unit> = { _, _, _, _, _ ->
+        msgType: MsgType,
+    ) -> Result<Unit> = { _, _, _, _, _, _ ->
         lambdaError()
     }
 
@@ -144,12 +154,14 @@ class FakeTimeline(
         htmlBody: String?,
         intentionalMentions: List<IntentionalMention>,
         fromNotification: Boolean,
+        msgType: MsgType,
     ): Result<Unit> = replyMessageLambda(
         repliedToEventId,
         body,
         htmlBody,
         intentionalMentions,
         fromNotification,
+        msgType,
     )
 
     var sendImageLambda: (
@@ -285,6 +297,29 @@ class FakeTimeline(
         )
     }
 
+    var sendGalleryLambda: (
+        items: List<GalleryItemInfo>,
+        caption: String?,
+        formattedCaption: String?,
+        inReplyToEventId: EventId?,
+    ) -> Result<MediaUploadHandler> = { _, _, _, _ ->
+        Result.success(FakeMediaUploadHandler())
+    }
+
+    override suspend fun sendGallery(
+        items: List<GalleryItemInfo>,
+        caption: String?,
+        formattedCaption: String?,
+        inReplyToEventId: EventId?,
+    ): Result<MediaUploadHandler> = simulateLongTask {
+        sendGalleryLambda(
+            items,
+            caption,
+            formattedCaption,
+            inReplyToEventId,
+        )
+    }
+
     var sendLocationLambda: (
         body: String,
         geoUri: String,
@@ -323,10 +358,10 @@ class FakeTimeline(
         )
     }
 
-    var forwardEventLambda: (eventId: EventId, roomIds: List<RoomId>) -> Result<Unit> = { _, _ -> lambdaError() }
+    var forwardEventsLambda: (eventIds: List<EventId>, roomIds: List<RoomId>) -> Result<Unit> = { _, _ -> lambdaError() }
 
-    override suspend fun forwardEvent(eventId: EventId, roomIds: List<RoomId>): Result<Unit> = simulateLongTask {
-        forwardEventLambda(eventId, roomIds)
+    override suspend fun forwardEvents(eventIds: List<EventId>, roomIds: List<RoomId>): Result<Unit> = simulateLongTask {
+        forwardEventsLambda(eventIds, roomIds)
     }
 
     var createPollLambda: (
@@ -428,6 +463,9 @@ class FakeTimeline(
 
     override suspend fun loadReplyDetails(eventId: EventId) = loadReplyDetailsLambda(eventId)
 
+    var isEventLoadedLambda: (eventId: EventId) -> Boolean = { false }
+    override suspend fun isEventLoaded(eventId: EventId): Boolean = isEventLoadedLambda(eventId)
+
     var pinEventLambda: (eventId: EventId) -> Result<Boolean> = { lambdaError() }
     override suspend fun pinEvent(eventId: EventId): Result<Boolean> {
         return pinEventLambda(eventId)
@@ -440,6 +478,14 @@ class FakeTimeline(
 
     override suspend fun getLatestEventId(): Result<EventId?> {
         return getLatestEventIdResult()
+    }
+
+    override suspend fun retrySend(eventOrTransactionId: EventOrTransactionId, sendTarget: SendTarget): Result<Boolean> {
+        return retrySendResult(eventOrTransactionId)
+    }
+
+    override suspend fun abortSend(eventOrTransactionId: EventOrTransactionId, sendTarget: SendTarget): Result<Boolean> {
+        return abortSendResult(eventOrTransactionId)
     }
 
     var closeCounter = 0

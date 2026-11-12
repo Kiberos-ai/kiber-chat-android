@@ -14,24 +14,60 @@ import android.os.PowerManager
 import androidx.core.content.getSystemService
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
+import io.element.android.libraries.core.coroutine.CoroutineDispatchers
+import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.di.annotations.ApplicationContext
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.push.impl.PushDatabase
 import io.element.android.libraries.push.impl.db.PushHistory
+import io.element.android.libraries.push.impl.db.PushRequest
 import io.element.android.services.toolbox.api.systemclock.SystemClock
+import kotlinx.coroutines.withContext
+import kotlin.time.Instant
 
 @ContributesBinding(AppScope::class)
 class DefaultPushHistoryService(
     private val pushDatabase: PushDatabase,
     private val systemClock: SystemClock,
+    private val dispatchers: CoroutineDispatchers,
     @ApplicationContext context: Context,
 ) : PushHistoryService {
     private val powerManager = context.getSystemService<PowerManager>()
     private val packageName = context.packageName
 
-    override fun onPushReceived(
+    override suspend fun insertOrUpdatePushRequest(pushRequest: PushRequest): Result<Unit> = withContext(dispatchers.io) {
+        runCatchingExceptions<Unit> { pushDatabase.pushRequestQueries.insertPushRequest(pushRequest).await() }
+    }
+
+    override suspend fun insertOrUpdatePushRequests(pushRequests: List<PushRequest>): Result<Unit> = withContext(dispatchers.io) {
+        runCatchingExceptions {
+            pushDatabase.transaction {
+                for (request in pushRequests) {
+                    pushDatabase.pushRequestQueries.insertPushRequest(request)
+                }
+            }
+        }
+    }
+
+    override suspend fun getPendingPushRequests(sessionId: SessionId, since: Instant?): Result<List<PushRequest>> = withContext(dispatchers.io) {
+        runCatchingExceptions {
+            pushDatabase.transactionWithResult {
+                val sinceTimeMillis = since?.toEpochMilliseconds() ?: 0
+                pushDatabase.pushRequestQueries.selectAllPendingForSession(sessionId.value, sinceTimeMillis).executeAsList()
+            }
+        }
+    }
+
+    override suspend fun removeOldPushRequests(sessionId: SessionId): Result<Unit> = withContext(dispatchers.io) {
+        runCatchingExceptions<Unit> {
+            val keepAmount = 100L
+            pushDatabase.pushRequestQueries.removeOldest(keepAmount)
+        }
+    }
+
+    override suspend fun onPushResult(
         providerInfo: String,
         eventId: EventId?,
         roomId: RoomId?,
@@ -58,19 +94,21 @@ class DefaultPushHistoryService(
             }
         }.takeIf { it.isNotEmpty() }
 
-        pushDatabase.pushHistoryQueries.insertPushHistory(
-            PushHistory(
-                pushDate = systemClock.epochMillis(),
-                providerInfo = providerInfo,
-                eventId = eventId?.value,
-                roomId = roomId?.value,
-                sessionId = sessionId?.value,
-                hasBeenResolved = if (hasBeenResolved) 1 else 0,
-                comment = finalComment,
+        withContext(dispatchers.io) {
+            pushDatabase.pushHistoryQueries.insertPushHistory(
+                PushHistory(
+                    pushDate = systemClock.epochMillis(),
+                    providerInfo = providerInfo,
+                    eventId = eventId?.value,
+                    roomId = roomId?.value,
+                    sessionId = sessionId?.value,
+                    hasBeenResolved = if (hasBeenResolved) 1 else 0,
+                    comment = finalComment,
+                )
             )
-        )
 
-        // Keep only the last 1_000 events
-        pushDatabase.pushHistoryQueries.removeOldest(1_000)
+            // Keep only the last 1_000 events
+            pushDatabase.pushHistoryQueries.removeOldest(1_000)
+        }
     }
 }

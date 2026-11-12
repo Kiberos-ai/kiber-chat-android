@@ -13,6 +13,7 @@ import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.notification.CallIntent
 import io.element.android.libraries.matrix.api.notification.RtcNotificationType
 import io.element.android.libraries.matrix.api.timeline.item.event.EventType
 import io.element.android.libraries.matrix.test.AN_AVATAR_URL
@@ -38,13 +39,14 @@ fun aSimpleNotifiableEvent(
     type: String? = null,
     isRedacted: Boolean = false,
     canBeReplaced: Boolean = false,
-    editedEventId: EventId? = null
+    editedEventId: EventId? = null,
+    noisy: Boolean = false,
 ) = SimpleNotifiableEvent(
     sessionId = sessionId,
     roomId = roomId,
     eventId = eventId,
     editedEventId = editedEventId,
-    noisy = false,
+    noisy = noisy,
     title = "title",
     description = "description",
     type = type,
@@ -58,14 +60,15 @@ fun anInviteNotifiableEvent(
     sessionId: SessionId = A_SESSION_ID,
     roomId: RoomId = A_ROOM_ID,
     eventId: EventId = AN_EVENT_ID,
-    isRedacted: Boolean = false
+    isRedacted: Boolean = false,
+    noisy: Boolean = false,
 ) = InviteNotifiableEvent(
     sessionId = sessionId,
     eventId = eventId,
     roomId = roomId,
     roomName = A_ROOM_NAME,
     editedEventId = null,
-    noisy = false,
+    noisy = noisy,
     title = "title",
     description = "description",
     type = null,
@@ -88,11 +91,12 @@ fun aNotifiableMessageEvent(
     senderId: UserId = A_USER_ID_2,
     senderDisambiguatedDisplayName: String = A_USER_NAME_2,
     roomName: String? = A_ROOM_NAME,
+    noisy: Boolean = false,
 ) = NotifiableMessageEvent(
     sessionId = sessionId,
     eventId = eventId,
     editedEventId = null,
-    noisy = false,
+    noisy = noisy,
     timestamp = timestamp,
     senderDisambiguatedDisplayName = senderDisambiguatedDisplayName,
     senderId = senderId,
@@ -125,6 +129,7 @@ fun aNotifiableCallEvent(
     rtcNotificationType: RtcNotificationType = RtcNotificationType.NOTIFY,
     timestamp: Long = 0L,
     expirationTimestamp: Long = 0L,
+    callIntent: CallIntent = CallIntent.VIDEO,
 ) = NotifiableRingingCallEvent(
     sessionId = sessionId,
     eventId = eventId,
@@ -142,19 +147,28 @@ fun aNotifiableCallEvent(
     roomAvatarUrl = roomAvatarUrl,
     senderAvatarUrl = senderAvatarUrl,
     rtcNotificationType = rtcNotificationType,
+    callIntent = callIntent,
 )
 
 fun aFallbackNotifiableEvent(
     sessionId: SessionId = A_SESSION_ID,
+    roomId: RoomId = A_ROOM_ID,
+    eventId: EventId = AN_EVENT_ID,
+    description: String? = "A fallback notification",
+    canBeReplaced: Boolean = false,
+    noisy: Boolean = false,
+    timestamp: Long = A_FAKE_TIMESTAMP,
+    cause: String? = "Unable to decrypt event",
 ) = FallbackNotifiableEvent(
     sessionId = sessionId,
-    roomId = A_ROOM_ID,
-    eventId = AN_EVENT_ID,
+    roomId = roomId,
+    eventId = eventId,
     editedEventId = null,
-    description = "A fallback notification",
-    canBeReplaced = false,
+    description = description,
+    canBeReplaced = canBeReplaced,
     isRedacted = false,
     isUpdated = false,
-    timestamp = A_FAKE_TIMESTAMP,
-    cause = "Unable to decrypt event",
+    noisy = noisy,
+    timestamp = timestamp,
+    cause = cause,
 )

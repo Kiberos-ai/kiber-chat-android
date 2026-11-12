@@ -20,9 +20,9 @@ import org.gradle.kotlin.dsl.closureOf
 import org.gradle.kotlin.dsl.project
 
 private fun DependencyHandlerScope.implementation(dependency: Any) = dependencies.add("implementation", dependency)
+internal fun DependencyHandler.implementation(dependency: Any) = add("implementation", dependency)
 private fun DependencyHandlerScope.testImplementation(dependency: Any) = dependencies.add("testImplementation", dependency)
 private fun DependencyHandlerScope.testReleaseImplementation(dependency: Any) = dependencies.add("testReleaseImplementation", dependency)
-internal fun DependencyHandler.implementation(dependency: Any) = add("implementation", dependency)
 
 // Implementation + config block
 private fun DependencyHandlerScope.implementation(
@@ -49,6 +49,7 @@ fun DependencyHandlerScope.testCommonDependencies(
     testImplementation(libs.test.arch.core)
     testImplementation(libs.test.junit)
     testImplementation(libs.test.mockk)
+    testImplementation(libs.test.parameter.injector)
     testImplementation(libs.test.robolectric)
     testImplementation(libs.test.truth)
     testImplementation(libs.test.turbine)
@@ -93,6 +94,7 @@ fun DependencyHandlerScope.allLibrariesImpl() {
     implementation(project(":libraries:network"))
     implementation(project(":libraries:core"))
     implementation(project(":libraries:eventformatter:impl"))
+    implementation(project(":libraries:htmlrenderer:impl"))
     implementation(project(":libraries:indicator:impl"))
     implementation(project(":libraries:permissions:impl"))
     implementation(project(":libraries:audio:impl"))
@@ -103,9 +105,11 @@ fun DependencyHandlerScope.allLibrariesImpl() {
     implementation(project(":libraries:architecture"))
     implementation(project(":libraries:dateformatter:impl"))
     implementation(project(":libraries:di"))
+    implementation(project(":libraries:cachestore:impl"))
     implementation(project(":libraries:session-storage:impl"))
     implementation(project(":libraries:mediapickers:impl"))
     implementation(project(":libraries:mediaupload:impl"))
+    implementation(project(":libraries:slashcommands:impl"))
     implementation(project(":libraries:usersearch:impl"))
     implementation(project(":libraries:textcomposer:impl"))
     implementation(project(":libraries:accountselect:impl"))
@@ -118,9 +122,10 @@ fun DependencyHandlerScope.allLibrariesImpl() {
     implementation(project(":libraries:troubleshoot:impl"))
     implementation(project(":libraries:fullscreenintent:impl"))
     implementation(project(":libraries:wellknown:impl"))
-    implementation(project(":libraries:oidc:impl"))
+    implementation(project(":libraries:oauth:impl"))
     implementation(project(":libraries:workmanager:impl"))
-    implementation(project(":libraries:recentemojis:impl"))
+    implementation(project(":libraries:emoji:impl"))
+    implementation(project(":libraries:htmlrenderer:impl"))
 }
 
 fun DependencyHandlerScope.allServicesImpl() {

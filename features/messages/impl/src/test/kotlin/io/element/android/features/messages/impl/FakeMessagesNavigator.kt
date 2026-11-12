@@ -13,26 +13,30 @@ import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.timeline.TimelineProvider
 import io.element.android.libraries.matrix.api.timeline.item.TimelineItemDebugInfo
 import io.element.android.tests.testutils.lambda.lambdaError
 import kotlinx.collections.immutable.ImmutableList
 
 class FakeMessagesNavigator(
     private val onShowEventDebugInfoClickLambda: (eventId: EventId?, debugInfo: TimelineItemDebugInfo) -> Unit = { _, _ -> lambdaError() },
-    private val onForwardEventClickLambda: (eventId: EventId) -> Unit = { _ -> lambdaError() },
+    private val onForwardEventClickLambda: (eventIds: List<EventId>, timelineProvider: TimelineProvider) -> Unit = { _, _ -> lambdaError() },
     private val onReportContentClickLambda: (eventId: EventId, senderId: UserId) -> Unit = { _, _ -> lambdaError() },
     private val onEditPollClickLambda: (eventId: EventId) -> Unit = { _ -> lambdaError() },
     private val onPreviewAttachmentLambda: (attachments: ImmutableList<Attachment>, inReplyToEventId: EventId?) -> Unit = { _, _ -> lambdaError() },
     private val onNavigateToRoomLambda: (roomId: RoomId, threadId: EventId?, serverNames: List<String>) -> Unit = { _, _, _ -> lambdaError() },
+    private val navigateToMemberLambda: (userId: UserId) -> Unit = { lambdaError() },
+    private val navigateToDeveloperSettingsLambda: () -> Unit = { lambdaError() },
     private val onOpenThreadLambda: (threadRootId: ThreadId, focusedEventId: EventId?) -> Unit = { _, _ -> lambdaError() },
     private val closeLambda: () -> Unit = { lambdaError() },
+    private val navigateToCurrentLiveLocationLambda: () -> Unit = { lambdaError() },
 ) : MessagesNavigator {
     override fun navigateToEventDebugInfo(eventId: EventId?, debugInfo: TimelineItemDebugInfo) {
         onShowEventDebugInfoClickLambda(eventId, debugInfo)
     }
 
-    override fun forwardEvent(eventId: EventId) {
-        onForwardEventClickLambda(eventId)
+    override fun forwardEvents(eventIds: List<EventId>, timelineProvider: TimelineProvider) {
+        onForwardEventClickLambda(eventIds, timelineProvider)
     }
 
     override fun navigateToReportMessage(eventId: EventId, senderId: UserId) {
@@ -51,8 +55,20 @@ class FakeMessagesNavigator(
         onNavigateToRoomLambda(roomId, eventId, serverNames)
     }
 
+    override fun navigateToMember(userId: UserId) {
+        navigateToMemberLambda(userId)
+    }
+
     override fun navigateToThread(threadRootId: ThreadId, focusedEventId: EventId?) {
         onOpenThreadLambda(threadRootId, focusedEventId)
+    }
+
+    override fun navigateToDeveloperSettings() {
+        navigateToDeveloperSettingsLambda()
+    }
+
+    override fun navigateToCurrentLiveLocation() {
+        navigateToCurrentLiveLocationLambda()
     }
 
     override fun close() {

@@ -11,6 +11,7 @@ package io.element.android.compound.previews
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
+import io.element.android.compound.theme.Theme
 import io.element.android.compound.tokens.generated.compoundColorsHcDark
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.persistentMapOf
@@ -26,7 +28,7 @@ import kotlinx.collections.immutable.persistentMapOf
 @Preview(heightDp = 2000)
 @Composable
 internal fun CompoundSemanticColorsLight() = ElementTheme {
-    Surface {
+    Surface(Modifier.width(300.dp)) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -47,7 +49,7 @@ internal fun CompoundSemanticColorsLight() = ElementTheme {
 internal fun CompoundSemanticColorsLightHc() = ElementTheme(
     compoundDark = compoundColorsHcDark,
 ) {
-    Surface {
+    Surface(Modifier.width(300.dp)) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -65,8 +67,8 @@ internal fun CompoundSemanticColorsLightHc() = ElementTheme(
 
 @Preview(heightDp = 2000)
 @Composable
-internal fun CompoundSemanticColorsDark() = ElementTheme(darkTheme = true) {
-    Surface {
+internal fun CompoundSemanticColorsDark() = ElementTheme(theme = Theme.Dark) {
+    Surface(Modifier.width(300.dp)) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -85,10 +87,10 @@ internal fun CompoundSemanticColorsDark() = ElementTheme(darkTheme = true) {
 @Preview(heightDp = 2000)
 @Composable
 internal fun CompoundSemanticColorsDarkHc() = ElementTheme(
-    darkTheme = true,
+    theme = Theme.Dark,
     compoundDark = compoundColorsHcDark,
 ) {
-    Surface {
+    Surface(Modifier.width(300.dp)) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -122,6 +124,7 @@ private fun getSemanticColors(): ImmutableMap<String, Color> {
             "bgBadgeAccent" to bgBadgeAccent,
             "bgBadgeDefault" to bgBadgeDefault,
             "bgBadgeInfo" to bgBadgeInfo,
+            "bgBadgePrimary" to bgBadgePrimary,
             "bgCanvasDefault" to bgCanvasDefault,
             "bgCanvasDefaultLevel1" to bgCanvasDefaultLevel1,
             "bgCanvasDisabled" to bgCanvasDisabled,
@@ -155,12 +158,10 @@ private fun getSemanticColors(): ImmutableMap<String, Color> {
             "gradientActionStop2" to gradientActionStop2,
             "gradientActionStop3" to gradientActionStop3,
             "gradientActionStop4" to gradientActionStop4,
+            "gradientCriticalStop1" to gradientCriticalStop1,
+            "gradientCriticalStop2" to gradientCriticalStop2,
             "gradientInfoStop1" to gradientInfoStop1,
             "gradientInfoStop2" to gradientInfoStop2,
-            "gradientInfoStop3" to gradientInfoStop3,
-            "gradientInfoStop4" to gradientInfoStop4,
-            "gradientInfoStop5" to gradientInfoStop5,
-            "gradientInfoStop6" to gradientInfoStop6,
             "gradientSubtleStop1" to gradientSubtleStop1,
             "gradientSubtleStop2" to gradientSubtleStop2,
             "gradientSubtleStop3" to gradientSubtleStop3,

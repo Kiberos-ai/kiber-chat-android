@@ -8,24 +8,30 @@
 
 package io.element.android.libraries.designsystem.components.avatar
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
+@Immutable
 enum class AvatarSize(val dp: Dp) {
     CurrentUserTopBar(32.dp),
+    CurrentRoomTopBar(32.dp),
 
     IncomingCall(140.dp),
     RoomDetailsHeader(96.dp),
     RoomListItem(52.dp),
+    SearchRoomListItem(32.dp),
+    ThreadsListItem(52.dp),
 
     SpaceListItem(52.dp),
 
     RoomSelectRoomListItem(36.dp),
 
-    UserPreference(56.dp),
+    UserPreference(52.dp),
 
     UserHeader(96.dp),
     UserListItem(36.dp),
+    AccountInfoUser(36.dp),
 
     SelectedUser(52.dp),
     SelectedRoom(56.dp),
@@ -46,7 +52,8 @@ enum class AvatarSize(val dp: Dp) {
     RoomInviteItem(52.dp),
     InviteSender(16.dp),
 
-    EditRoomDetails(68.dp),
+    EditRoomDetails(64.dp),
+    EditSpaceDetails(96.dp),
     RoomListManageUser(96.dp),
 
     NotificationsOptIn(32.dp),
@@ -62,11 +69,9 @@ enum class AvatarSize(val dp: Dp) {
     KnockRequestItem(52.dp),
     KnockRequestBanner(32.dp),
 
-    MediaSender(32.dp),
+    MediaSender(52.dp),
 
     DmCreationConfirmation(64.dp),
-
-    UserVerification(52.dp),
 
     OrganizationHeader(64.dp),
     SpaceHeader(64.dp),
@@ -75,6 +80,8 @@ enum class AvatarSize(val dp: Dp) {
     SpaceMember(24.dp),
     LeaveSpaceRoom(32.dp),
     SelectParentSpace(32.dp),
-
     AccountItem(32.dp),
+    OtherAccountItem(20.dp),
+    LocationPin(32.dp),
+    ActiveCallItem(20.dp)
 }

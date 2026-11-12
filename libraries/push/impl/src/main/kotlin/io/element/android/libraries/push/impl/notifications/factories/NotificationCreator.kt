@@ -11,11 +11,11 @@ package io.element.android.libraries.push.impl.notifications.factories
 import android.app.Notification
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Bundle
 import androidx.annotation.ColorInt
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationCompat.MessagingStyle
 import androidx.core.app.Person
-import androidx.core.os.bundleOf
 import coil3.ImageLoader
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
@@ -24,6 +24,7 @@ import io.element.android.libraries.designsystem.components.avatar.AvatarData
 import io.element.android.libraries.designsystem.components.avatar.AvatarSize
 import io.element.android.libraries.designsystem.utils.CommonDrawables
 import io.element.android.libraries.di.annotations.ApplicationContext
+import io.element.android.libraries.matrix.api.core.MatrixPatterns
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.timeline.item.event.EventType
@@ -102,11 +103,25 @@ interface NotificationCreator {
         /**
          * Creates a tag for a message notification given its [roomId] and optional [threadId].
          */
-        fun messageTag(roomId: RoomId, threadId: ThreadId?): String = if (threadId != null) {
-            "$roomId|$threadId"
-        } else {
-            roomId.value
+        fun messageTag(roomId: RoomId, threadId: ThreadId?): String = buildString {
+            append(roomId)
+            threadId?.let {
+                append(SEPARATOR)
+                append(it)
+            }
         }
+
+        /**
+         * Extracts the [RoomId] from a message notification [tag] created by [messageTag].
+         * Returns null if the tag does not start with a valid room id.
+         */
+        fun getMessageNotificationRoomId(tag: String): RoomId? {
+            return tag.substringBefore(SEPARATOR)
+                .takeIf(MatrixPatterns::isRoomId)
+                ?.let(::RoomId)
+        }
+
+        private const val SEPARATOR = "|"
     }
 }
 
@@ -145,7 +160,7 @@ class DefaultNotificationCreator(
                 sessionId = roomInfo.sessionId,
                 roomId = roomInfo.roomId,
                 eventId = eventId,
-                extras = bundleOf(ROOM_OPENED_FROM_NOTIFICATION to true),
+                extras = Bundle().apply { putBoolean(ROOM_OPENED_FROM_NOTIFICATION, true) },
             )
         }
         val containsMissedCall = events.any { it.type == EventType.RTC_NOTIFICATION }
@@ -196,11 +211,12 @@ class DefaultNotificationCreator(
             isThread = threadId != null,
             roomIsGroup = !roomInfo.isDm,
         )
-        messagingStyle.addMessagesFromEvents(events, imageLoader)
+        val newEvents = messagingStyle.filterOutAlreadyDisplayedEvents(events)
+        messagingStyle.addMessagesFromEvents(newEvents, imageLoader)
         return builder
             .setCategory(category)
             .setNumber(events.size)
-            .setOnlyAlertOnce(roomInfo.isUpdated)
+            .setOnlyAlertOnce(roomInfo.isUpdated || newEvents.isEmpty())
             .setWhen(lastMessageTimestamp)
             // MESSAGING_STYLE sets title and content for API 16 and above devices.
             .setStyle(messagingStyle)
@@ -293,7 +309,7 @@ class DefaultNotificationCreator(
                     sessionId = simpleNotifiableEvent.sessionId,
                     roomId = simpleNotifiableEvent.roomId,
                     eventId = null,
-                    extras = bundleOf(ROOM_OPENED_FROM_NOTIFICATION to true),
+                    extras = Bundle().apply { putBoolean(ROOM_OPENED_FROM_NOTIFICATION, true) },
                 )
             )
             .apply {
@@ -316,7 +332,7 @@ class DefaultNotificationCreator(
         val fallbackNotifiableEvent = fallbackNotifiableEvents.first()
         val channelId = notificationChannels.getChannelIdForMessage(
             sessionId = fallbackNotifiableEvent.sessionId,
-            noisy = false,
+            noisy = fallbackNotifiableEvents.any { it.noisy },
         )
         val existingCounter = existingNotification
             ?.extras
@@ -331,9 +347,7 @@ class DefaultNotificationCreator(
                     .annotateForDebug(8)
             )
             .setExtras(
-                bundleOf(
-                    FALLBACK_COUNTER_EXTRA to counter
-                )
+                Bundle().apply { putInt(FALLBACK_COUNTER_EXTRA, counter) },
             )
             .setNumber(counter)
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_ALL)
@@ -416,6 +430,15 @@ class DefaultNotificationCreator(
             .setAutoCancel(true)
             .setContentIntent(pendingIntentFactory.createOpenSessionPendingIntent(userId))
             .build()
+    }
+
+    private fun MessagingStyle.filterOutAlreadyDisplayedEvents(
+        events: List<NotifiableMessageEvent>,
+    ): List<NotifiableMessageEvent> {
+        val displayedEventIds = messages.mapNotNullTo(mutableSetOf()) { it.extras.getString(MESSAGE_EVENT_ID) }
+        return events.filter { event ->
+            event.isSmartReplyError() || displayedEventIds.add(event.eventId.value)
+        }
     }
 
     private suspend fun MessagingStyle.addMessagesFromEvents(

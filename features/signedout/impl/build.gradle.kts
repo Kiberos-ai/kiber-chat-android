@@ -16,6 +16,12 @@ plugins {
 
 android {
     namespace = "io.element.android.features.signedout.impl"
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 setupDependencyInjection()
@@ -27,9 +33,10 @@ dependencies {
     implementation(projects.libraries.matrix.api)
     implementation(projects.libraries.matrixui)
     implementation(projects.libraries.designsystem)
+    implementation(projects.libraries.sessionStorage.api)
     implementation(projects.libraries.uiStrings)
 
-    testCommonDependencies(libs)
+    testCommonDependencies(libs, true)
     testImplementation(projects.libraries.matrix.test)
     testImplementation(projects.libraries.sessionStorage.test)
 }

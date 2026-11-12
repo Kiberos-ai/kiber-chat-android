@@ -20,9 +20,9 @@ setupDependencyInjection()
 
 dependencies {
     api(projects.libraries.workmanager.api)
-    implementation(projects.libraries.core)
     implementation(projects.libraries.matrix.api)
     implementation(projects.libraries.di)
+    implementation(projects.libraries.sessionStorage.api)
 
     testCommonDependencies(libs, false)
     testImplementation(projects.libraries.sessionStorage.test)

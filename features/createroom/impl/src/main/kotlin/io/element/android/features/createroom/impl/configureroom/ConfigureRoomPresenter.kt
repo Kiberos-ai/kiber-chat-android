@@ -16,6 +16,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -24,6 +25,7 @@ import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import im.vector.app.features.analytics.plan.CreatedRoom
+import io.element.android.features.enterprise.api.SessionEnterpriseService
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.architecture.runCatchingUpdatingState
@@ -73,10 +75,11 @@ class ConfigureRoomPresenter(
     private val featureFlagService: FeatureFlagService,
     private val roomAliasHelper: RoomAliasHelper,
     private val mediaOptimizationConfigProvider: MediaOptimizationConfigProvider,
+    private val sessionEnterpriseService: SessionEnterpriseService,
 ) : Presenter<ConfigureRoomState> {
     @AssistedFactory
     interface Factory {
-        fun create(isSpace: Boolean, parentSpaceId: RoomId?): ConfigureRoomPresenter
+        fun create(isSpace: Boolean, initialParentSpaceId: RoomId?): ConfigureRoomPresenter
     }
 
     private val cameraPermissionPresenter: PermissionsPresenter = permissionsPresenterFactory.create(android.Manifest.permission.CAMERA)
@@ -84,13 +87,15 @@ class ConfigureRoomPresenter(
 
     @Composable
     override fun present(): ConfigureRoomState {
-        val canAddRoomToSpace by featureFlagService.isFeatureEnabledFlow(FeatureFlags.CreateSpaces).collectAsState(false)
         val cameraPermissionState = cameraPermissionPresenter.present()
         val createRoomConfig by dataStore.getCreateRoomConfigFlow().collectAsState()
         val homeserverName = remember { matrixClient.userIdServerName() }
         val isKnockFeatureEnabled by remember {
             featureFlagService.isFeatureEnabledFlow(FeatureFlags.Knock)
         }.collectAsState(initial = false)
+        val arePublicRoomsDisabled by produceState(false) {
+            value = sessionEnterpriseService.arePublicRoomsDisabledByHomeserver()
+        }
         val roomAddressValidity = remember {
             mutableStateOf<RoomAddressValidity>(RoomAddressValidity.Unknown)
         }
@@ -113,12 +118,8 @@ class ConfigureRoomPresenter(
         }
 
         var spaces by remember { mutableStateOf<ImmutableList<SpaceRoom>>(persistentListOf()) }
-        LaunchedEffect(canAddRoomToSpace) {
-            spaces = if (canAddRoomToSpace) {
-                matrixClient.spaceService.editableSpaces().getOrElse { emptyList() }.toImmutableList()
-            } else {
-                persistentListOf()
-            }
+        LaunchedEffect(Unit) {
+            spaces = matrixClient.spaceService.editableSpaces().getOrElse { emptyList() }.toImmutableList()
             val parentSpace = spaces.find { it.roomId == initialParentSpaceId }
             parentSpace?.let {
                 dataStore.setParentSpace(parentSpace = parentSpace, updateVisibility = true)
@@ -148,12 +149,13 @@ class ConfigureRoomPresenter(
         // 1. If we are creating a space.
         // 2. If it has a parent space.
         // 3. If knocking is enabled.
+        // 4. If the homeserver forbids public rooms.
         val parentSpace = createRoomConfig.parentSpace
-        val availableJoinRules = remember(parentSpace, isSpace, isKnockFeatureEnabled) {
+        val availableJoinRules = remember(parentSpace, isSpace, isKnockFeatureEnabled, arePublicRoomsDisabled) {
             when {
                 isSpace && parentSpace != null -> TODO("Adding a space to a parent space is not supported yet! How did you get here?")
                 parentSpace == null || parentSpace.joinRule == JoinRule.Public -> listOfNotNull(
-                    JoinRuleItem.PublicVisibility.Public,
+                    JoinRuleItem.PublicVisibility.Public.takeIf { !arePublicRoomsDisabled },
                     JoinRuleItem.PublicVisibility.AskToJoin.takeIf { !isSpace && isKnockFeatureEnabled },
                     JoinRuleItem.PrivateVisibility.Private,
                 ).toImmutableList()
@@ -191,14 +193,14 @@ class ConfigureRoomPresenter(
             localCoroutineScope.createRoom(config, createRoomAction)
         }
 
-        fun handleEvent(event: ConfigureRoomEvents) {
+        fun handleEvent(event: ConfigureRoomEvent) {
             when (event) {
-                is ConfigureRoomEvents.RoomNameChanged -> dataStore.setRoomName(event.name)
-                is ConfigureRoomEvents.TopicChanged -> dataStore.setTopic(event.topic)
-                is ConfigureRoomEvents.JoinRuleChanged -> dataStore.setJoinRule(event.joinRuleItem)
-                is ConfigureRoomEvents.RoomAddressChanged -> dataStore.setRoomAddress(event.roomAddress)
-                is ConfigureRoomEvents.CreateRoom -> createRoom(createRoomConfig)
-                is ConfigureRoomEvents.HandleAvatarAction -> {
+                is ConfigureRoomEvent.RoomNameChanged -> dataStore.setRoomName(event.name)
+                is ConfigureRoomEvent.TopicChanged -> dataStore.setTopic(event.topic)
+                is ConfigureRoomEvent.JoinRuleChanged -> dataStore.setJoinRule(event.joinRuleItem)
+                is ConfigureRoomEvent.RoomAddressChanged -> dataStore.setRoomAddress(event.roomAddress)
+                is ConfigureRoomEvent.CreateRoom -> createRoom(createRoomConfig)
+                is ConfigureRoomEvent.HandleAvatarAction -> {
                     when (event.action) {
                         AvatarAction.ChoosePhoto -> galleryImagePicker.launch()
                         AvatarAction.TakePhoto -> if (cameraPermissionState.permissionGranted) {
@@ -210,10 +212,10 @@ class ConfigureRoomPresenter(
                         AvatarAction.Remove -> dataStore.setAvatarUri(uri = null)
                     }
                 }
-                is ConfigureRoomEvents.SetParentSpace -> {
+                is ConfigureRoomEvent.SetParentSpace -> {
                     dataStore.setParentSpace(event.space, false)
                 }
-                ConfigureRoomEvents.CancelCreateRoom -> {
+                ConfigureRoomEvent.CancelCreateRoom -> {
                     createRoomAction.value = AsyncAction.Uninitialized
                 }
             }
@@ -261,7 +263,7 @@ class ConfigureRoomPresenter(
                     CreateRoomParameters(
                         name = config.roomName,
                         topic = config.topic,
-                        isEncrypted = true,
+                        isEncrypted = !sessionEnterpriseService.isEncryptionDisabledByHomeserver(),
                         isDirect = false,
                         visibility = RoomVisibility.Private,
                         historyVisibilityOverride = RoomHistoryVisibility.Invited,

@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,7 +52,9 @@ import io.element.android.libraries.matrix.ui.components.AvatarPickerView
 import io.element.android.libraries.permissions.api.PermissionsView
 import io.element.android.libraries.ui.strings.CommonStrings
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * https://www.figma.com/design/pDlJZGBsri47FNTXMnEdXB/Compound-Android-Templates?node-id=3182-36115&t=U1vS3px9HzlzWYd7-4
+ */
 @Composable
 fun EditUserProfileView(
     state: EditUserProfileState,
@@ -117,6 +118,7 @@ fun EditUserProfileView(
                 state = avatarPickerState,
                 onClick = ::onAvatarClick,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
+                enabled = state.canChangeAvatarUrl,
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -125,12 +127,13 @@ fun EditUserProfileView(
                 style = ElementTheme.typography.fontBodyLgRegular,
                 textAlign = TextAlign.Center,
             )
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             TextField(
                 label = stringResource(R.string.screen_edit_profile_display_name),
                 value = state.displayName,
                 placeholder = stringResource(CommonStrings.common_room_name_placeholder),
                 singleLine = true,
+                enabled = state.canChangeDisplayName,
                 onValueChange = { state.eventSink(EditUserProfileEvent.UpdateDisplayName(it)) },
             )
         }
@@ -173,7 +176,7 @@ fun EditUserProfileView(
 
 @PreviewsDayNight
 @Composable
-internal fun EditUserProfileViewPreview(@PreviewParameter(EditUserProfileStateProvider::class) state: EditUserProfileState) =
+internal fun EditUserProfileViewPreview(@PreviewParameter(EditUserProfileStatePreviewParam::class) state: EditUserProfileState) =
     ElementPreview {
         EditUserProfileView(
             onEditProfileSuccess = {},

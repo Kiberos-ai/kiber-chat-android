@@ -9,6 +9,7 @@
 package io.element.android.features.location.api.internal
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.features.enterprise.api.remoteconfig.MapTilerConfig
 import org.junit.Test
 
 class MapTilerStaticMapUrlBuilderTest {
@@ -22,6 +23,38 @@ class MapTilerStaticMapUrlBuilderTest {
     @Test
     fun `isServiceAvailable returns true if api key is not empty`() {
         assertThat(builder.isServiceAvailable()).isTrue()
+    }
+
+    @Test
+    fun `builder created from a config only uses the config values`() {
+        val configBuilder = MapTilerStaticMapUrlBuilder(
+            MapTilerConfig(
+                apiKey = "API_KEY",
+                lightStyleId = "light",
+                darkStyleId = "dark",
+                baseUrl = "https://custom.url/maps/",
+            )
+        )
+        assertThat(configBuilder.isServiceAvailable()).isTrue()
+        assertThat(
+            configBuilder.build(lat = 1.23, lon = -4.56, zoom = 7.8, darkMode = true, width = 800, height = 600, density = 1f)
+        ).isEqualTo("https://custom.url/maps/dark/static/-4.56,1.23,7.8/800x600.webp?key=API_KEY&attribution=topright")
+    }
+
+    @Test
+    fun `builder created from a partial config falls back to the public MapTiler defaults`() {
+        val configBuilder = MapTilerStaticMapUrlBuilder(
+            MapTilerConfig(
+                apiKey = "",
+                lightStyleId = null,
+                darkStyleId = null,
+                baseUrl = null,
+            )
+        )
+        assertThat(configBuilder.isServiceAvailable()).isFalse()
+        assertThat(
+            configBuilder.build(lat = 1.23, lon = -4.56, zoom = 7.8, darkMode = false, width = 800, height = 600, density = 1f)
+        ).isEqualTo("https://api.maptiler.com/maps/basic-v2/static/-4.56,1.23,7.8/800x600.webp?key=&attribution=topright")
     }
 
     @Test
@@ -47,7 +80,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = 600,
                 density = 1f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/800x600.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/800x600.webp?key=anApiKey&attribution=topright")
     }
 
     @Test
@@ -62,7 +95,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = 900,
                 density = 1.5f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/800x600.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/800x600.webp?key=anApiKey&attribution=topright")
     }
 
     @Test
@@ -77,7 +110,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = 1200,
                 density = 2f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/800x600@2x.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/800x600@2x.webp?key=anApiKey&attribution=topright")
     }
 
     @Test
@@ -92,7 +125,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = 1800,
                 density = 3f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/800x600@2x.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/800x600@2x.webp?key=anApiKey&attribution=topright")
     }
 
     @Test
@@ -107,7 +140,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = 2048,
                 density = 1f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/2048x1024.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/2048x1024.webp?key=anApiKey&attribution=topright")
 
         assertThat(
             builder.build(
@@ -119,7 +152,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = 4096,
                 density = 1f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/1024x2048.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/1024x2048.webp?key=anApiKey&attribution=topright")
 
         assertThat(
             builder.build(
@@ -131,7 +164,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = 2048,
                 density = 2f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/1024x512@2x.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/1024x512@2x.webp?key=anApiKey&attribution=topright")
 
         assertThat(
             builder.build(
@@ -143,7 +176,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = 4096,
                 density = 2f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/512x1024@2x.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/512x1024@2x.webp?key=anApiKey&attribution=topright")
 
         assertThat(
             builder.build(
@@ -155,7 +188,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = Int.MAX_VALUE,
                 density = 2f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/1024x1024@2x.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/1024x1024@2x.webp?key=anApiKey&attribution=topright")
     }
 
     @Test
@@ -170,7 +203,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = 0,
                 density = 1f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/0x0.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/0x0.webp?key=anApiKey&attribution=topright")
 
         assertThat(
             builder.build(
@@ -182,7 +215,7 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = 0,
                 density = 2f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/0x0@2x.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/0x0@2x.webp?key=anApiKey&attribution=topright")
 
         assertThat(
             builder.build(
@@ -194,6 +227,6 @@ class MapTilerStaticMapUrlBuilderTest {
                 height = Int.MIN_VALUE,
                 density = 1f,
             )
-        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/0x0.webp?key=anApiKey&attribution=bottomleft")
+        ).isEqualTo("https://base.url/aLightMapId/static/-4.56,1.23,7.8/0x0.webp?key=anApiKey&attribution=topright")
     }
 }

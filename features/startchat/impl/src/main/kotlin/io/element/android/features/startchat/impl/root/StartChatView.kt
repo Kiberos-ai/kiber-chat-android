@@ -19,10 +19,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
@@ -31,6 +32,7 @@ import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.startchat.api.ConfirmingStartDmWithMatrixUser
 import io.element.android.features.startchat.impl.R
 import io.element.android.features.startchat.impl.components.UserListView
+import io.element.android.libraries.androidutils.ui.hideKeyboardAndAwaitAnimation
 import io.element.android.libraries.designsystem.components.async.AsyncActionView
 import io.element.android.libraries.designsystem.components.async.AsyncActionViewDefaults
 import io.element.android.libraries.designsystem.components.button.BackButton
@@ -42,11 +44,14 @@ import io.element.android.libraries.designsystem.theme.components.ListSectionHea
 import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
+import io.element.android.libraries.designsystem.utils.lazyColumnContentPadding
+import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.ui.components.CreateDmConfirmationBottomSheet
 import io.element.android.libraries.matrix.ui.components.MatrixUserRow
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.launch
 
 @Composable
 fun StartChatView(
@@ -59,13 +64,16 @@ fun StartChatView(
     onRoomDirectorySearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val coroutineScope = rememberCoroutineScope()
+
     Scaffold(
         modifier = modifier.fillMaxWidth(),
         topBar = {
             if (!state.userListState.isSearchActive) {
                 CreateRoomRootViewTopBar(onCloseClick = onCloseClick)
             }
-        }
+        },
+        contentWindowInsets = scaffoldScrollableContentInsets,
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -73,6 +81,8 @@ fun StartChatView(
                 .consumeWindowInsets(paddingValues),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            val view = LocalView.current
+
             UserListView(
                 modifier = Modifier.fillMaxWidth(),
                 // Do not render suggestions in this case, the suggestion will be rendered
@@ -81,7 +91,10 @@ fun StartChatView(
                     recentDirectRooms = persistentListOf(),
                 ),
                 onSelectUser = {
-                    state.eventSink(StartChatEvents.StartDM(it))
+                    coroutineScope.launch {
+                        view.hideKeyboardAndAwaitAnimation()
+                        state.eventSink(StartChatEvent.StartDM(it))
+                    }
                 },
                 onDeselectUser = { },
             )
@@ -110,20 +123,21 @@ fun StartChatView(
         errorMessage = { stringResource(R.string.screen_start_chat_error_starting_chat) },
         onRetry = {
             state.userListState.selectedUsers.firstOrNull()
-                ?.let { state.eventSink(StartChatEvents.StartDM(it)) }
+                ?.let { state.eventSink(StartChatEvent.StartDM(it)) }
             // Cancel start DM if there is no more selected user (should not happen)
-                ?: state.eventSink(StartChatEvents.CancelStartDM)
+                ?: state.eventSink(StartChatEvent.CancelStartDM)
         },
-        onErrorDismiss = { state.eventSink(StartChatEvents.CancelStartDM) },
+        onErrorDismiss = { state.eventSink(StartChatEvent.CancelStartDM) },
         confirmationDialog = { data ->
             if (data is ConfirmingStartDmWithMatrixUser) {
                 CreateDmConfirmationBottomSheet(
                     matrixUser = data.matrixUser,
+                    isUserIdentityUnknown = data.isUserIdentityUnknown,
                     onSendInvite = {
-                        state.eventSink(StartChatEvents.StartDM(data.matrixUser))
+                        state.eventSink(StartChatEvent.StartDM(data.matrixUser))
                     },
                     onDismiss = {
-                        state.eventSink(StartChatEvents.CancelStartDM)
+                        state.eventSink(StartChatEvent.CancelStartDM)
                     },
                 )
             }
@@ -131,7 +145,6 @@ fun StartChatView(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CreateRoomRootViewTopBar(
     onCloseClick: () -> Unit,
@@ -156,7 +169,9 @@ private fun CreateRoomActionButtonsList(
     onRoomDirectorySearchClick: () -> Unit,
     onDmClick: (RoomId) -> Unit,
 ) {
-    LazyColumn {
+    LazyColumn(
+        contentPadding = lazyColumnContentPadding,
+    ) {
         item {
             CreateRoomActionButton(
                 iconRes = CompoundDrawables.ic_compound_plus,
@@ -164,14 +179,12 @@ private fun CreateRoomActionButtonsList(
                 onClick = onNewRoomClick,
             )
         }
-        if (state.isRoomDirectorySearchEnabled) {
-            item {
-                CreateRoomActionButton(
-                    iconRes = CompoundDrawables.ic_compound_list_bulleted,
-                    text = stringResource(id = R.string.screen_room_directory_search_title),
-                    onClick = onRoomDirectorySearchClick,
-                )
-            }
+        item {
+            CreateRoomActionButton(
+                iconRes = CompoundDrawables.ic_compound_list_bulleted,
+                text = stringResource(id = R.string.screen_room_directory_search_title),
+                onClick = onRoomDirectorySearchClick,
+            )
         }
         item {
             CreateRoomActionButton(
@@ -240,7 +253,7 @@ private fun CreateRoomActionButton(
 
 @PreviewsDayNight
 @Composable
-internal fun StartChatViewPreview(@PreviewParameter(StartChatStateProvider::class) state: StartChatState) =
+internal fun StartChatViewPreview(@PreviewParameter(StartChatStatePreviewParam::class) state: StartChatState) =
     ElementPreview {
         StartChatView(
             state = state,

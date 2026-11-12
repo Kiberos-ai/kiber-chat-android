@@ -20,7 +20,7 @@ internal fun SessionData.toDbModel(): DbSessionData {
         accessToken = accessToken,
         refreshToken = refreshToken,
         homeserverUrl = homeserverUrl,
-        oidcData = oidcData,
+        oidcData = oAuthData,
         loginTimestamp = loginTimestamp?.time,
         isTokenValid = if (isTokenValid) 1L else 0L,
         loginType = loginType.name,
@@ -31,6 +31,7 @@ internal fun SessionData.toDbModel(): DbSessionData {
         lastUsageIndex = lastUsageIndex,
         userDisplayName = userDisplayName,
         userAvatarUrl = userAvatarUrl,
+        userAvatarData = userAvatarData,
     )
 }
 
@@ -41,7 +42,7 @@ internal fun DbSessionData.toApiModel(): SessionData {
         accessToken = accessToken,
         refreshToken = refreshToken,
         homeserverUrl = homeserverUrl,
-        oidcData = oidcData,
+        oAuthData = oidcData,
         loginTimestamp = loginTimestamp?.let { Date(it) },
         isTokenValid = isTokenValid == 1L,
         loginType = LoginType.fromName(loginType ?: LoginType.UNKNOWN.name),
@@ -52,5 +53,6 @@ internal fun DbSessionData.toApiModel(): SessionData {
         lastUsageIndex = lastUsageIndex,
         userDisplayName = userDisplayName,
         userAvatarUrl = userAvatarUrl,
+        userAvatarData = userAvatarData,
     )
 }

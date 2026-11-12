@@ -6,97 +6,187 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
+@file:Suppress("COMPOSE_APPLIER_CALL_MISMATCH")
+
 package io.element.android.features.location.impl.show
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
-import io.element.android.compound.tokens.generated.CompoundIcons
-import io.element.android.compound.tokens.generated.TypographyTokens
+import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.location.api.internal.rememberTileStyleUrl
 import io.element.android.features.location.impl.common.MapDefaults
-import io.element.android.features.location.impl.common.PermissionDeniedDialog
-import io.element.android.features.location.impl.common.PermissionRationaleDialog
+import io.element.android.features.location.impl.common.ui.LocationConstraintsDialog
 import io.element.android.features.location.impl.common.ui.LocationFloatingActionButton
+import io.element.android.features.location.impl.common.ui.LocationPinMarkers
+import io.element.android.features.location.impl.common.ui.LocationShareRow
+import io.element.android.features.location.impl.common.ui.MapBottomSheetScaffold
+import io.element.android.features.location.impl.common.ui.UserLocationPuck
+import io.element.android.features.location.impl.common.userlocation.UserLocationTrackingEffect
 import io.element.android.libraries.designsystem.components.button.BackButton
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.theme.components.Icon
-import io.element.android.libraries.designsystem.theme.components.IconButton
-import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
-import io.element.android.libraries.designsystem.utils.CommonDrawables
-import io.element.android.libraries.maplibre.compose.CameraMode
-import io.element.android.libraries.maplibre.compose.CameraMoveStartedReason
-import io.element.android.libraries.maplibre.compose.IconAnchor
-import io.element.android.libraries.maplibre.compose.MapLibreMap
-import io.element.android.libraries.maplibre.compose.Symbol
-import io.element.android.libraries.maplibre.compose.rememberCameraPositionState
-import io.element.android.libraries.maplibre.compose.rememberSymbolState
 import io.element.android.libraries.ui.strings.CommonStrings
-import kotlinx.collections.immutable.toImmutableMap
-import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.geometry.LatLng
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.launch
+import org.maplibre.compose.camera.CameraAnimation
+import org.maplibre.compose.camera.CameraMoveReason
+import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.map.MapState
+import org.maplibre.compose.map.rememberMapState
+import org.maplibre.compose.style.BaseStyle
+import org.maplibre.spatialk.geojson.Position
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShowLocationView(
     state: ShowLocationState,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    when (state.permissionDialog) {
-        ShowLocationState.Dialog.None -> Unit
-        ShowLocationState.Dialog.PermissionDenied -> PermissionDeniedDialog(
-            onContinue = { state.eventSink(ShowLocationEvents.OpenAppSettings) },
-            onDismiss = { state.eventSink(ShowLocationEvents.DismissDialog) },
-            appName = state.appName,
+    LocationConstraintsDialog(
+        state = state.dialogState,
+        appName = state.appName,
+        onRequestPermissions = { state.eventSink(ShowLocationEvent.RequestPermissions) },
+        onOpenAppSettings = { state.eventSink(ShowLocationEvent.OpenAppSettings) },
+        onOpenLocationSettings = { state.eventSink(ShowLocationEvent.OpenLocationSettings) },
+        onDismiss = { state.eventSink(ShowLocationEvent.DismissDialog) },
+    )
+
+    if (LocalInspectionMode.current) {
+        // Inspection/preview mode: the native map runtime is unavailable (previews, screenshot
+        // tests, Robolectric), so no MapState is created and the scaffold renders a placeholder map.
+        ShowLocationScaffold(
+            state = state,
+            mapState = null,
+            onBackClick = onBackClick,
+            onLocationShareClick = {},
+            modifier = modifier,
         )
-        ShowLocationState.Dialog.PermissionRationale -> PermissionRationaleDialog(
-            onContinue = { state.eventSink(ShowLocationEvents.RequestPermissions) },
-            onDismiss = { state.eventSink(ShowLocationEvents.DismissDialog) },
-            appName = state.appName,
+    } else {
+        ShowLocationViewContent(
+            state = state,
+            onBackClick = onBackClick,
+            modifier = modifier,
         )
     }
+}
 
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.Builder()
-            .target(LatLng(state.location.lat, state.location.lon))
-            .zoom(MapDefaults.DEFAULT_ZOOM)
-            .build()
+@Composable
+private fun ShowLocationViewContent(
+    state: ShowLocationState,
+    onBackClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tileStyleUrl = rememberTileStyleUrl(state.mapTilerConfig)
+    val mapState = rememberMapState(
+        baseStyle = BaseStyle.Uri(tileStyleUrl),
+        initialCameraPosition = MapDefaults.defaultCameraPosition,
+    ) {
+        if (!state.hideUserLocationPuck) {
+            UserLocationPuck(location = state.userLocationState.location)
+        }
+        val markers = remember(state.locationShares) {
+            state.locationShares.map { it.toMarkerData() }.toImmutableList()
+        }
+        LocationPinMarkers(markers)
     }
-
-    LaunchedEffect(state.isTrackMyLocation) {
-        when (state.isTrackMyLocation) {
-            false -> cameraPositionState.cameraMode = CameraMode.NONE
-            true -> {
-                cameraPositionState.position = CameraPosition.Builder()
-                    .zoom(MapDefaults.DEFAULT_ZOOM)
-                    .build()
-                cameraPositionState.cameraMode = CameraMode.TRACKING
+    UserLocationTrackingEffect(
+        mapState = mapState,
+        locationState = state.userLocationState,
+        enabled = state.isTrackMyLocation,
+    )
+    var hasAnimatedToFocusedLocation by remember { mutableStateOf(false) }
+    LaunchedEffect(state.focusedLocation) {
+        if (state.focusedLocation != null && !hasAnimatedToFocusedLocation) {
+            hasAnimatedToFocusedLocation = true
+            val position = CameraPosition(
+                center = Position(latitude = state.focusedLocation.location.lat, longitude = state.focusedLocation.location.lon),
+                zoom = MapDefaults.DEFAULT_ZOOM
+            )
+            mapState.setCameraPosition(position)
+        }
+    }
+    LaunchedEffect(mapState.isCameraMoving) {
+        if (mapState.cameraMoveReason == CameraMoveReason.Gesture) {
+            state.eventSink(ShowLocationEvent.TrackMyLocation(false))
+        }
+    }
+    val coroutineScope = rememberCoroutineScope()
+    ShowLocationScaffold(
+        state = state,
+        mapState = mapState,
+        onBackClick = onBackClick,
+        onLocationShareClick = { locationShare ->
+            state.eventSink(ShowLocationEvent.TrackMyLocation(false))
+            val position = CameraPosition(
+                center = Position(locationShare.location.lon, locationShare.location.lat),
+                // Force pointing to NORTH
+                bearing = 0.0,
+                zoom = mapState.cameraPosition.zoom.coerceAtLeast(MapDefaults.DEFAULT_ZOOM),
+            )
+            coroutineScope.launch {
+                mapState.animateCamera(update = position.toCameraUpdate(), animation = CameraAnimation.Fly.Standard)
             }
+        },
+        modifier = modifier,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ShowLocationScaffold(
+    state: ShowLocationState,
+    mapState: MapState?,
+    onBackClick: () -> Unit,
+    onLocationShareClick: (LocationShareItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scaffoldState = rememberBottomSheetScaffoldState(
+        bottomSheetState = rememberBottomSheetState(
+            initialValue = SheetValue.Expanded,
+            enabledValues = setOf(SheetValue.PartiallyExpanded, SheetValue.Expanded),
+        )
+    )
+    LaunchedEffect(state.isSheetDraggable) {
+        if (!state.isSheetDraggable) {
+            scaffoldState.bottomSheetState.expand()
         }
     }
-
-    LaunchedEffect(cameraPositionState.isMoving) {
-        if (cameraPositionState.cameraMoveStartedReason == CameraMoveStartedReason.GESTURE) {
-            state.eventSink(ShowLocationEvents.TrackMyLocation(false))
-        }
-    }
-
-    Scaffold(
+    MapBottomSheetScaffold(
+        isReady = state.mapTilerConfig != null,
+        sheetDragHandle = if (state.isSheetDraggable) {
+            { BottomSheetDefaults.DragHandle() }
+        } else {
+            null
+        },
+        sheetSwipeEnabled = state.isSheetDraggable,
+        scaffoldState = scaffoldState,
+        mapState = mapState,
         modifier = modifier,
         topBar = {
             TopAppBar(
@@ -106,74 +196,59 @@ fun ShowLocationView(
                         onClick = onBackClick,
                     )
                 },
-                actions = {
-                    IconButton(
-                        onClick = { state.eventSink(ShowLocationEvents.Share) }
-                    ) {
-                        Icon(
-                            imageVector = CompoundIcons.ShareAndroid(),
-                            contentDescription = stringResource(CommonStrings.action_share),
+            )
+        },
+        sheetContent = {
+            if (!state.isSheetDraggable) {
+                // If sheet is draggable the DragHandle has already some padding
+                Spacer(Modifier.height(20.dp))
+            }
+            if (state.locationShares.isEmpty()) {
+                Text(
+                    text = stringResource(CommonStrings.screen_live_location_sheet_nobody_sharing),
+                    style = ElementTheme.typography.fontBodyLgMedium,
+                    color = ElementTheme.colors.textPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(all = 16.dp),
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                Text(
+                    text = stringResource(CommonStrings.screen_static_location_sheet_title),
+                    style = ElementTheme.typography.fontBodyLgMedium,
+                    color = ElementTheme.colors.textPrimary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                LazyColumn {
+                    items(state.locationShares) { locationShare ->
+                        LocationShareRow(
+                            item = locationShare,
+                            onShareClick = { state.eventSink(ShowLocationEvent.Share(locationShare.location)) },
+                            onStopClick = { state.eventSink(ShowLocationEvent.StopLocationSharing) },
+                            modifier = Modifier.clickable { onLocationShareClick(locationShare) }
                         )
                     }
                 }
-            )
+            }
         },
-        floatingActionButton = {
+        overlay = {
             LocationFloatingActionButton(
                 isMapCenteredOnUser = state.isTrackMyLocation,
-                onClick = { state.eventSink(ShowLocationEvents.TrackMyLocation(true)) },
+                onClick = { state.eventSink(ShowLocationEvent.TrackMyLocation(true)) },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(all = 16.dp),
             )
-        },
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .consumeWindowInsets(paddingValues)
-                .fillMaxSize(),
-        ) {
-            state.description?.let {
-                Text(
-                    text = it,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = TypographyTokens.fontBodyMdRegular,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                )
-            }
-
-            MapLibreMap(
-                styleUri = rememberTileStyleUrl(),
-                modifier = Modifier.fillMaxSize(),
-                images = mapOf(PIN_ID to CommonDrawables.pin).toImmutableMap(),
-                cameraPositionState = cameraPositionState,
-                uiSettings = MapDefaults.uiSettings,
-                symbolManagerSettings = MapDefaults.symbolManagerSettings,
-                locationSettings = MapDefaults.locationSettings.copy(
-                    locationEnabled = state.hasLocationPermission,
-                ),
-            ) {
-                Symbol(
-                    iconId = PIN_ID,
-                    state = rememberSymbolState(
-                        position = LatLng(state.location.lat, state.location.lon)
-                    ),
-                    iconAnchor = IconAnchor.BOTTOM,
-                )
-            }
         }
-    }
+    )
 }
 
 @PreviewsDayNight
 @Composable
-internal fun ShowLocationViewPreview(@PreviewParameter(ShowLocationStateProvider::class) state: ShowLocationState) = ElementPreview {
+internal fun ShowLocationViewPreview(@PreviewParameter(ShowLocationStatePreviewParam::class) state: ShowLocationState) = ElementPreview {
     ShowLocationView(
         state = state,
         onBackClick = {},
     )
 }
-
-private const val PIN_ID = "pin"

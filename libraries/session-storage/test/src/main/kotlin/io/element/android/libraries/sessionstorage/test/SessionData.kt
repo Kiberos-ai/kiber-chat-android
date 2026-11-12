@@ -23,6 +23,7 @@ fun aSessionData(
     lastUsageIndex: Long = 0,
     userDisplayName: String? = null,
     userAvatarUrl: String? = null,
+    userAvatarData: String? = null,
 ): SessionData {
     return SessionData(
         userId = sessionId,
@@ -30,7 +31,7 @@ fun aSessionData(
         accessToken = accessToken,
         refreshToken = refreshToken,
         homeserverUrl = "aHomeserverUrl",
-        oidcData = null,
+        oAuthData = null,
         loginTimestamp = null,
         isTokenValid = isTokenValid,
         loginType = LoginType.UNKNOWN,
@@ -41,5 +42,6 @@ fun aSessionData(
         lastUsageIndex = lastUsageIndex,
         userDisplayName = userDisplayName,
         userAvatarUrl = userAvatarUrl,
+        userAvatarData = userAvatarData,
     )
 }

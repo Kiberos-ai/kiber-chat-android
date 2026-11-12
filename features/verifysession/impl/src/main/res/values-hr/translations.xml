@@ -2,8 +2,8 @@
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
   <string name="screen_identity_confirmation_cannot_confirm">"Ne možete potvrditi?"</string>
   <string name="screen_identity_confirmation_create_new_recovery_key">"Izradi novi ključ za oporavak"</string>
-  <string name="screen_identity_confirmation_subtitle">"Potvrdite ovaj uređaj kako biste postavili sigurnu razmjenu poruka."</string>
-  <string name="screen_identity_confirmation_title">"Potvrdite svoj identitet"</string>
+  <string name="screen_identity_confirmation_subtitle">"Odaberite način potvrde za postavljanje sigurne razmjene poruka."</string>
+  <string name="screen_identity_confirmation_title">"Potvrdite svoj digitalni identitet"</string>
   <string name="screen_identity_confirmation_use_another_device">"Upotrijebite drugi uređaj"</string>
   <string name="screen_identity_confirmation_use_recovery_key">"Upotrijebi ključ za oporavak"</string>
   <string name="screen_identity_confirmed_subtitle">"Sada možete sigurno čitati ili slati poruke, a svatko s kim razgovarate također može vjerovati ovom uređaju."</string>
@@ -38,10 +38,13 @@
   <string name="screen_session_verification_request_title">"Zatražena je provjera"</string>
   <string name="screen_session_verification_they_dont_match">"Ne podudaraju se"</string>
   <string name="screen_session_verification_they_match">"Podudaraju se"</string>
+  <string name="screen_session_verification_unavailable_subtitle">"Molimo koristite drugi uređaj ili ključ za oporavak."</string>
+  <string name="screen_session_verification_unavailable_title">"Verifikacija s ovim uređajem trenutno nije dostupna"</string>
   <string name="screen_session_verification_use_another_device_subtitle">"Prije nego što odavde započnete provjeru, provjerite jeste li otvorili aplikaciju na drugom uređaju."</string>
   <string name="screen_session_verification_use_another_device_title">"Otvorite aplikaciju na drugom potvrđenom uređaju"</string>
   <string name="screen_session_verification_user_initiator_subtitle">"Radi dodatne sigurnosti potvrdite ovog korisnika tako da usporedite skup emotikona na svojim uređajima. Učinite to koristeći se pouzdanim načinom komunikacije."</string>
   <string name="screen_session_verification_user_initiator_title">"Želite li potvrditi ovog korisnika?"</string>
+  <string name="screen_session_verification_user_requesting_verification">"Korisnik koji traži provjeru:"</string>
   <string name="screen_session_verification_user_responder_subtitle">"Radi dodatne sigurnosti drugi korisnik želi potvrditi vaš identitet. Bit će vam prikazan skup emotikona za usporedbu."</string>
   <string name="screen_session_verification_waiting_another_device_subtitle">"Trebali biste vidjeti skočni prozor na drugom uređaju. Sada započnite provjeru odatle."</string>
   <string name="screen_session_verification_waiting_another_device_title">"Započni provjeru na drugom uređaju"</string>
@@ -50,5 +53,5 @@
   <string name="screen_session_verification_waiting_subtitle">"Nakon prihvaćanja moći ćete nastaviti s potvrđivanjem."</string>
   <string name="screen_session_verification_waiting_to_accept_subtitle">"Prihvatite zahtjev za pokretanje postupka provjere u drugoj sesiji kako biste nastavili."</string>
   <string name="screen_session_verification_waiting_to_accept_title">"Čekanje na prihvaćanje zahtjeva"</string>
-  <string name="screen_signout_in_progress_dialog_content">"Odjavljivanje…"</string>
+  <string name="screen_signout_in_progress_dialog_content">"Uklanjanje uređaja…"</string>
 </resources>

@@ -6,8 +6,6 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package io.element.android.features.roomdetailsedit.impl
 
 import androidx.activity.compose.BackHandler
@@ -19,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +48,12 @@ import io.element.android.libraries.matrix.ui.components.AvatarPickerView
 import io.element.android.libraries.permissions.api.PermissionsView
 import io.element.android.libraries.ui.strings.CommonStrings
 
+/**
+ * For space:
+ * https://www.figma.com/design/pDlJZGBsri47FNTXMnEdXB/Compound-Android-Templates?node-id=2216-110711
+ * For room:
+ * https://www.figma.com/design/pDlJZGBsri47FNTXMnEdXB/Compound-Android-Templates?node-id=3187-47342
+ */
 @Composable
 fun RoomDetailsEditView(
     state: RoomDetailsEditState,
@@ -102,11 +105,11 @@ fun RoomDetailsEditView(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
             val avatarPickerState = remember(state.roomAvatarUrl, state.roomRawName) {
-                val size = AvatarSize.EditRoomDetails
+                val size = if (state.isSpace) AvatarSize.EditSpaceDetails else AvatarSize.EditRoomDetails
                 val type = if (state.isSpace) AvatarType.Space() else AvatarType.Room()
                 AvatarPickerState.Selected(
                     avatarData = AvatarData(id = state.roomId.value, name = state.roomRawName, size = size, url = state.roomAvatarUrl),
-                    type = type
+                    type = type,
                 )
             }
             AvatarPickerView(
@@ -179,7 +182,7 @@ fun RoomDetailsEditView(
 
 @PreviewsDayNight
 @Composable
-internal fun RoomDetailsEditViewPreview(@PreviewParameter(RoomDetailsEditStateProvider::class) state: RoomDetailsEditState) = ElementPreview {
+internal fun RoomDetailsEditViewPreview(@PreviewParameter(RoomDetailsEditStatePreviewParam::class) state: RoomDetailsEditState) = ElementPreview {
     RoomDetailsEditView(
         state = state,
         onDone = {},

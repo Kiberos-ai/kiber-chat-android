@@ -6,19 +6,23 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
+@file:OptIn(ExperimentalCoroutinesApi::class)
+
 package io.element.android.features.home.impl
 
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.announcement.api.Announcement
 import io.element.android.features.announcement.api.AnnouncementService
+import io.element.android.features.announcement.test.FakeAnnouncementService
 import io.element.android.features.home.impl.roomlist.aRoomListState
 import io.element.android.features.home.impl.spaces.HomeSpacesState
 import io.element.android.features.home.impl.spaces.aHomeSpacesState
-import io.element.android.features.logout.api.direct.aDirectLogoutState
 import io.element.android.features.rageshake.api.RageshakeFeatureAvailability
-import io.element.android.features.rageshake.test.logs.FakeAnnouncementService
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
+import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.indicator.api.IndicatorService
 import io.element.android.libraries.indicator.test.FakeIndicatorService
 import io.element.android.libraries.matrix.api.MatrixClient
@@ -33,15 +37,20 @@ import io.element.android.libraries.matrix.test.sync.FakeSyncService
 import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.libraries.sessionstorage.test.InMemorySessionStore
 import io.element.android.libraries.sessionstorage.test.aSessionData
-import io.element.android.tests.testutils.MutablePresenter
 import io.element.android.tests.testutils.WarmUpRule
 import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.lambda.value
 import io.element.android.tests.testutils.test
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import kotlin.time.Duration.Companion.milliseconds
 
 class HomePresenterTest {
     @get:Rule
@@ -79,7 +88,6 @@ class HomePresenterTest {
                 MatrixUser(A_USER_ID, A_USER_NAME, AN_AVATAR_URL)
             )
             assertThat(withUserState.showAvatarIndicator).isFalse()
-            assertThat(withUserState.showNavigationBar).isTrue()
         }
     }
 
@@ -88,7 +96,7 @@ class HomePresenterTest {
         val presenter = createHomePresenter(
             rageshakeFeatureAvailability = { flowOf(true) },
             sessionStore = InMemorySessionStore(
-                updateUserProfileResult = { _, _, _ -> },
+                updateUserProfileResult = { _, _, _, _ -> },
             ),
         )
         presenter.test {
@@ -105,7 +113,7 @@ class HomePresenterTest {
         val presenter = createHomePresenter(
             indicatorService = indicatorService,
             sessionStore = InMemorySessionStore(
-                updateUserProfileResult = { _, _, _ -> },
+                updateUserProfileResult = { _, _, _, _ -> },
             ),
         )
         presenter.test {
@@ -114,6 +122,46 @@ class HomePresenterTest {
             indicatorService.setShowRoomListTopBarIndicator(true)
             val finalState = awaitItem()
             assertThat(finalState.showAvatarIndicator).isTrue()
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `present - total unread count is updated on sync heartbeat`() = runTest {
+        var unreadCount = 0L
+        val syncService = FakeSyncService()
+        val presenter = createHomePresenter(
+            client = FakeMatrixClient(
+                syncService = syncService,
+                totalUnreadCountResult = { Result.success(unreadCount) },
+            ),
+            syncService = syncService,
+        )
+        presenter.test {
+            assertThat(awaitItem().totalUnreadCount).isEqualTo(0)
+            unreadCount = 5
+            syncService.emitHeartBeat()
+            advanceTimeBy(200.milliseconds)
+            assertThat(awaitItem().totalUnreadCount).isEqualTo(5)
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `present - total unread count defaults to 0 when the SDK call fails`() = runTest {
+        val syncService = FakeSyncService()
+        val presenter = createHomePresenter(
+            client = FakeMatrixClient(
+                syncService = syncService,
+                totalUnreadCountResult = { Result.failure(AN_EXCEPTION) },
+            ),
+            syncService = syncService,
+        )
+        presenter.test {
+            assertThat(awaitItem().totalUnreadCount).isEqualTo(0)
+            syncService.emitHeartBeat()
+            advanceTimeBy(200.milliseconds)
+            expectNoEvents()
         }
     }
 
@@ -127,7 +175,7 @@ class HomePresenterTest {
         val presenter = createHomePresenter(
             client = matrixClient,
             sessionStore = InMemorySessionStore(
-                updateUserProfileResult = { _, _, _ -> },
+                updateUserProfileResult = { _, _, _, _ -> },
             ),
         )
         presenter.test {
@@ -139,14 +187,10 @@ class HomePresenterTest {
 
     @Test
     fun `present - NavigationBar change`() = runTest {
-        val showAnnouncementResult = lambdaRecorder<Announcement, Unit> { }
         val presenter = createHomePresenter(
             sessionStore = InMemorySessionStore(
-                updateUserProfileResult = { _, _, _ -> },
+                updateUserProfileResult = { _, _, _, _ -> },
             ),
-            announcementService = FakeAnnouncementService(
-                showAnnouncementResult = showAnnouncementResult,
-            )
         )
         presenter.test {
             val initialState = awaitItem()
@@ -154,43 +198,133 @@ class HomePresenterTest {
             initialState.eventSink(HomeEvent.SelectHomeNavigationBarItem(HomeNavigationBarItem.Spaces))
             val finalState = awaitItem()
             assertThat(finalState.currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Spaces)
-            showAnnouncementResult.assertions().isCalledOnce()
-                .with(value(Announcement.Space))
         }
     }
 
     @Test
-    fun `present - NavigationBar is hidden when the last space is left when the user can't create new spaces`() = runTest {
-        val homeSpacesPresenter = MutablePresenter(aHomeSpacesState())
+    fun `present - multi account announcement is shown when announced, feature enabled and a single account`() = runTest {
         val presenter = createHomePresenter(
             sessionStore = InMemorySessionStore(
-                updateUserProfileResult = { _, _, _ -> },
+                initialList = listOf(aSessionData()),
+                updateUserProfileResult = { _, _, _, _ -> },
             ),
-            homeSpacesPresenter = homeSpacesPresenter,
             announcementService = FakeAnnouncementService(
-                showAnnouncementResult = {},
-            )
+                initialAnnouncementsToShowFlowValue = listOf(Announcement.MultiAccount),
+            ),
+            featureFlagService = FakeFeatureFlagService(
+                initialState = mapOf(FeatureFlags.MultiAccount.key to true),
+            ),
         )
         presenter.test {
-            val initialState = awaitItem()
-            assertThat(initialState.currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Chats)
-            assertThat(initialState.showNavigationBar).isTrue()
-            // User navigate to Spaces
-            initialState.eventSink(HomeEvent.SelectHomeNavigationBarItem(HomeNavigationBarItem.Spaces))
-            val spaceState = awaitItem()
-            assertThat(spaceState.currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Spaces)
-            // The last space is left
-            homeSpacesPresenter.updateState(aHomeSpacesState(spaceRooms = emptyList(), canCreateSpaces = false))
-            skipItems(1)
-            val finalState = awaitItem()
-            // We are back to Chats
-            assertThat(finalState.currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Chats)
-            assertThat(finalState.showNavigationBar).isFalse()
+            assertThat(awaitItem().showMultiAccountAnnouncement).isFalse()
+            assertThat(expectMostRecentItem().showMultiAccountAnnouncement).isTrue()
+        }
+    }
+
+    @Test
+    fun `present - multi account announcement is not shown when the feature is disabled`() = runTest {
+        val presenter = createHomePresenter(
+            sessionStore = InMemorySessionStore(
+                initialList = listOf(aSessionData()),
+                updateUserProfileResult = { _, _, _, _ -> },
+            ),
+            announcementService = FakeAnnouncementService(
+                initialAnnouncementsToShowFlowValue = listOf(Announcement.MultiAccount),
+            ),
+            featureFlagService = FakeFeatureFlagService(
+                initialState = mapOf(FeatureFlags.MultiAccount.key to false),
+            ),
+        )
+        presenter.test {
+            assertThat(expectMostRecentItem().showMultiAccountAnnouncement).isFalse()
+        }
+    }
+
+    @Test
+    fun `present - multi account announcement is not shown and is dismissed when there are several accounts`() = runTest {
+        val onAnnouncementDismissedResult = lambdaRecorder<Announcement, Unit> { }
+        val presenter = createHomePresenter(
+            sessionStore = InMemorySessionStore(
+                initialList = listOf(
+                    aSessionData(sessionId = "@alice:server.org"),
+                    aSessionData(sessionId = "@bob:server.org"),
+                ),
+                updateUserProfileResult = { _, _, _, _ -> },
+            ),
+            announcementService = FakeAnnouncementService(
+                initialAnnouncementsToShowFlowValue = listOf(Announcement.MultiAccount),
+                onAnnouncementDismissedResult = onAnnouncementDismissedResult,
+            ),
+            featureFlagService = FakeFeatureFlagService(
+                initialState = mapOf(FeatureFlags.MultiAccount.key to true),
+            ),
+        )
+        presenter.test {
+            assertThat(expectMostRecentItem().showMultiAccountAnnouncement).isFalse()
+            onAnnouncementDismissedResult.assertions().isCalledOnce()
+                .with(value(Announcement.MultiAccount))
+        }
+    }
+
+    @Test
+    fun `present - dismiss multi account announcement`() = runTest {
+        val onAnnouncementDismissedResult = lambdaRecorder<Announcement, Unit> { }
+        val announcementService = FakeAnnouncementService(
+            initialAnnouncementsToShowFlowValue = listOf(Announcement.MultiAccount),
+            onAnnouncementDismissedResult = onAnnouncementDismissedResult,
+        )
+        val presenter = createHomePresenter(
+            sessionStore = InMemorySessionStore(
+                initialList = listOf(aSessionData()),
+                updateUserProfileResult = { _, _, _, _ -> },
+            ),
+            announcementService = announcementService,
+            featureFlagService = FakeFeatureFlagService(
+                initialState = mapOf(FeatureFlags.MultiAccount.key to true),
+            ),
+        )
+        presenter.test {
+            val state = expectMostRecentItem()
+            assertThat(state.showMultiAccountAnnouncement).isTrue()
+            state.eventSink(HomeEvent.DismissMultiAccountAnnouncement)
+            announcementService.emitAnnouncementsToShow(emptyList())
+            assertThat(awaitItem().showMultiAccountAnnouncement).isFalse()
+            onAnnouncementDismissedResult.assertions().isCalledOnce()
+                .with(value(Announcement.MultiAccount))
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `present - dismissing the swipe avatar announcement`() = runTest {
+        val onAnnouncementDismissedResult = lambdaRecorder<Announcement, Unit> { }
+        val presenter = createHomePresenter(
+            announcementService = FakeAnnouncementService(
+                onAnnouncementDismissedResult = onAnnouncementDismissedResult,
+            ),
+            appCoroutineScope = this,
+        )
+        presenter.test {
+            val state = expectMostRecentItem()
+            state.eventSink(HomeEvent.DismissSwipeAvatarAnnouncement)
+            runCurrent()
+            onAnnouncementDismissedResult.assertions().isCalledOnce()
+                .with(value(Announcement.SwipeAvatarToSwitchAccount))
+        }
+    }
+
+    @Test
+    fun `present - total unread count is loaded in the initial state`() = runTest {
+        val presenter = createHomePresenter(
+            client = FakeMatrixClient(totalUnreadCountResult = { Result.success(5) }),
+        )
+        presenter.test {
+            assertThat(awaitItem().totalUnreadCount).isEqualTo(5)
         }
     }
 }
 
-internal fun createHomePresenter(
+internal fun TestScope.createHomePresenter(
     client: MatrixClient = FakeMatrixClient(),
     syncService: SyncService = FakeSyncService(),
     snackbarDispatcher: SnackbarDispatcher = SnackbarDispatcher(),
@@ -199,6 +333,8 @@ internal fun createHomePresenter(
     homeSpacesPresenter: Presenter<HomeSpacesState> = Presenter { aHomeSpacesState() },
     sessionStore: SessionStore = InMemorySessionStore(),
     announcementService: AnnouncementService = FakeAnnouncementService(),
+    featureFlagService: FeatureFlagService = FakeFeatureFlagService(),
+    appCoroutineScope: CoroutineScope = backgroundScope,
 ) = HomePresenter(
     client = client,
     syncService = syncService,
@@ -206,8 +342,9 @@ internal fun createHomePresenter(
     indicatorService = indicatorService,
     roomListPresenter = { aRoomListState() },
     homeSpacesPresenter = homeSpacesPresenter,
-    logoutPresenter = { aDirectLogoutState() },
     rageshakeFeatureAvailability = rageshakeFeatureAvailability,
     sessionStore = sessionStore,
     announcementService = announcementService,
+    featureFlagService = featureFlagService,
+    appCoroutineScope = appCoroutineScope,
 )
