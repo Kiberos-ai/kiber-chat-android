@@ -9,16 +9,16 @@
 package config
 
 object BuildTimeConfig {
-    const val APPLICATION_ID = "io.element.android.x"
-    const val APPLICATION_NAME = "Element X"
-    val METADATA_HOST_REVERSED: String? = null
+    const val APPLICATION_ID = "chat.kiber.app"
+    const val APPLICATION_NAME = "Kiber"
+    val METADATA_HOST_REVERSED: String? = "chat.kiber"
     val OAUTH_CLIENT_URL_PATH: String? = "apps/android"
-    val URL_WEBSITE: String? = null
-    val URL_LOGO: String? = null
-    val URL_COPYRIGHT: String? = null
-    val URL_ACCEPTABLE_USE: String? = null
-    val URL_PRIVACY: String? = null
-    val URL_POLICY: String? = null
+    val URL_WEBSITE: String? = "https://kiber.chat"
+    val URL_LOGO: String? = "https://kiber.chat/assets/logo.png"
+    val URL_COPYRIGHT: String? = "https://kiber.chat"
+    val URL_ACCEPTABLE_USE: String? = "https://kiber.chat/assets/terms.html"
+    val URL_PRIVACY: String? = "https://kiber.chat/assets/privacy.html"
+    val URL_POLICY: String? = "https://kiber.chat/assets/privacy.html"
     val SERVICES_MAPTILER_BASE_URL: String? = null
     val SERVICES_MAPTILER_APIKEY: String? = null
     val SERVICES_MAPTILER_LIGHT_MAPID: String? = null

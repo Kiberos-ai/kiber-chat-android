@@ -112,3 +112,8 @@ lint/tmp/
 .DS_Store
 
 checkouts/**
+
+# Kiber.Chat secrets
+kiber-chat-release.keystore
+keystore.properties
+google-services.json

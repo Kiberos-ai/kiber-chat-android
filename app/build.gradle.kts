@@ -27,6 +27,7 @@ import extension.setupDependencyInjection
 import extension.testCommonDependencies
 import org.sonarqube.gradle.SonarResolverTask
 import java.util.Locale
+import java.util.Properties
 
 plugins {
     id("io.element.android-compose-application")
@@ -88,6 +89,19 @@ android {
             storeFile = file("./signature/debug.keystore")
             storePassword = "android"
         }
+        // Kiber.Chat release signing
+        register("release") {
+            val keystorePropertiesFile = rootProject.file("keystore.properties")
+            if (keystorePropertiesFile.exists()) {
+                val keystoreProperties = Properties().apply {
+                    load(keystorePropertiesFile.inputStream())
+                }
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
+        }
         register("nightly") {
             keyAlias = environmentOrGradleValue("ELEMENT_ANDROID_NIGHTLY_KEYID", "signing.element.nightly.keyId")
             keyPassword = environmentOrGradleValue("ELEMENT_ANDROID_NIGHTLY_KEYPASSWORD", "signing.element.nightly.keyPassword")
@@ -124,7 +138,12 @@ android {
                 "login_redirect_scheme",
                 oAuthRedirectSchemeBase,
             )
-            signingConfig = signingConfigs.getByName("debug")
+            // Use release signing if keystore.properties exists, otherwise debug
+            signingConfig = if (rootProject.file("keystore.properties").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
 
             optimization {
                 enable = true
